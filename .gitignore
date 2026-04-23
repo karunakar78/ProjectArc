@@ -1,0 +1,21 @@
+# Virtual environment
+venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+
+# Django
+*.sqlite3
+*.log
+
+# Media uploads (user files, not source code)
+media/
+
+# Environment variables (if you add them later)
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
