@@ -509,3 +509,19 @@ def export_csv(request):
         'projects': qs,
         'count':    qs.count(),
     })
+
+
+# ──────────────────────────────────────────
+# Notification count
+# Called by the bell badge JS in base.html
+# every 30 seconds. Returns unread count.
+# ──────────────────────────────────────────
+
+@login_required
+def notif_count(request):
+    from .signals import Notification
+    count = Notification.objects.filter(
+        recipient=request.user,
+        is_read=False
+    ).count()
+    return JsonResponse({'count': count})
