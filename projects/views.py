@@ -1,94 +1,129 @@
 import csv
 import reversion
 
-from django.shortcuts         import render, redirect, get_object_or_404
-from django.contrib.auth      import login
+from django.shortcuts          import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.contrib            import messages
-from django.http               import HttpResponse, JsonResponse
-from django.views.generic      import ListView, DetailView, CreateView
+from django.contrib             import messages
+from django.http                import HttpResponse, JsonResponse
+from django.views.generic       import DetailView, ListView
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.urls               import reverse_lazy
-from django.utils              import timezone
+from django.utils               import timezone
 
-from .models  import Project, Milestone, MilestoneVersion
-from .forms   import ProjectForm, MilestoneUploadForm, CSVExportForm
+from .models import Project, Milestone, MilestoneVersion, Evaluation
+from .forms  import (
+    ProjectForm,
+    GuideAllotmentForm,
+    MilestoneUploadForm,
+    EvaluationForm,
+    CoordinatorApprovalForm,
+    CSVExportForm,
+)
 
 
-# ── small helper ──────────────────────────
-# Reuse this wherever you need to check roles
-# instead of repeating is_staff checks inline.
+# ──────────────────────────────────────────
+# Role helpers
+# ──────────────────────────────────────────
 
 def is_guide(user):
-    """Staff users are treated as guides / faculty."""
-    return user.is_staff
-
+    return user.is_staff and not user.is_superuser
 
 def is_coordinator(user):
-    """Superusers are treated as coordinators."""
     return user.is_superuser
 
 
 # ──────────────────────────────────────────
 # Dashboard
-# What the user sees right after login.
-# Role-aware: coordinator, guide, student
-# each get a different context.
 # ──────────────────────────────────────────
 
 @login_required
 def dashboard(request):
-    user = request.user
+    user    = request.user
     context = {'user': user}
 
     if is_coordinator(user):
-        # coordinators see everything
-        context['projects']     = Project.objects.all().select_related('guide')
-        context['total']        = context['projects'].count()
-        context['role']         = 'coordinator'
+        context['projects'] = Project.objects.all().select_related('guide')
+        context['total']    = context['projects'].count()
+        context['role']     = 'coordinator'
+
+        # pending evaluations waiting for coordinator approval
+        context['pending_approvals'] = Evaluation.objects.filter(
+            coordinator_approval='pending',
+            guide_submitted_at__isnull=False
+        ).select_related('project')
 
     elif is_guide(user):
-        # guides see only their assigned projects
-        context['projects']     = Project.objects.filter(
-                                    guide=user
-                                  ).prefetch_related('members', 'milestones')
-        context['role']         = 'guide'
+        context['projects'] = Project.objects.filter(
+            guide=user
+        ).prefetch_related('members', 'milestones')
+        context['role'] = 'guide'
+
+        # evaluations this guide needs to submit
+        context['pending_evaluations'] = Project.objects.filter(
+            guide=user
+        ).exclude(
+            evaluation__guide_submitted_at__isnull=False
+        )
 
     else:
-        # students see only projects they are members of
-        context['projects']     = request.user.enrolled_projects.prefetch_related(
-                                    'milestones'
-                                  )
-        context['role']         = 'student'
+        context['projects'] = user.enrolled_projects.prefetch_related('milestones')
+        context['role']     = 'student'
 
     return render(request, 'projects/dashboard.html', context)
 
 
 # ──────────────────────────────────────────
 # Project List
-# Simple list of all projects.
-# Used as the /projects/ browse page.
 # ──────────────────────────────────────────
 
-class ProjectListView(LoginRequiredMixin, ListView):
+@login_required
+def project_list(request):
+    query    = request.GET.get('q', '').strip()
+    projects = Project.objects.select_related('guide').prefetch_related('members')
+    if query:
+        projects = projects.filter(title__icontains=query)
+    return render(request, 'projects/project_list.html', {
+        'projects': projects,
+        'query':    query,
+    })
+
+
+# ──────────────────────────────────────────
+# Project Detail
+# ──────────────────────────────────────────
+
+class ProjectDetailView(LoginRequiredMixin, DetailView):
     model               = Project
-    template_name       = 'projects/project_list.html'
-    context_object_name = 'projects'
-    paginate_by         = 10
+    template_name       = 'projects/project_detail.html'
+    context_object_name = 'project'
 
-    def get_queryset(self):
-        # optional ?q= search in the URL
-        query = self.request.GET.get('q', '')
-        qs    = Project.objects.select_related('guide')
-        if query:
-            qs = qs.filter(title__icontains=query)
-        return qs
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        stages  = ['synopsis', 'phase1', 'phase2', 'final', 'publication']
+
+        milestone_map = {}
+        for stage in stages:
+            milestone_map[stage] = Milestone.objects.filter(
+                project=self.object,
+                stage=stage
+            ).first()
+
+        # get evaluation if it exists
+        evaluation = Evaluation.objects.filter(
+            project=self.object
+        ).first()
+
+        context['milestone_map']  = milestone_map
+        context['stages']         = stages
+        context['is_guide']       = is_guide(self.request.user)
+        context['is_coordinator'] = is_coordinator(self.request.user)
+        context['evaluation']     = evaluation
+        return context
 
 
 # ──────────────────────────────────────────
-# Project Create (Register)
-# Handles the "Register New Project" form.
-# Uses reversion so every save is versioned.
+# Register Project
+# Guide is NOT selected here — allotted
+# separately by coordinator.
 # ──────────────────────────────────────────
 
 @login_required
@@ -100,133 +135,182 @@ def register_project(request):
                 project = form.save()
                 reversion.set_user(request.user)
                 reversion.set_comment('Project registered.')
-
             messages.success(
                 request,
-                f'Project "{project.title}" registered successfully.'
+                f'Project "{project.title}" registered. '
+                'A guide will be assigned by the coordinator.'
             )
             return redirect('project_detail', pk=project.pk)
     else:
         form = ProjectForm()
-
     return render(request, 'projects/project_form.html', {'form': form})
 
 
 # ──────────────────────────────────────────
-# Project Detail
-# Shows all milestone stages and their
-# current status for one project.
-# ──────────────────────────────────────────
-
-class ProjectDetailView(LoginRequiredMixin, DetailView):
-    model               = Project
-    template_name       = 'projects/project_detail.html'
-    context_object_name = 'project'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-
-        # build a dict of stage → milestone object (or None)
-        # so the template can render every stage row cleanly
-        stages = ['synopsis', 'phase1', 'phase2', 'final', 'publication']
-        milestone_map = {}
-        for stage in stages:
-            milestone_map[stage] = Milestone.objects.filter(
-                project=self.object,
-                stage=stage
-            ).first()
-
-        context['milestone_map'] = milestone_map
-        context['stages']        = stages
-        context['is_guide']      = is_guide(self.request.user)
-        context['is_coordinator']= is_coordinator(self.request.user)
-        return context
-    
-
-# ──────────────────────────────────────────
-# Project List
-# Simple list of all projects.
-# Used as the /projects/ browse page.
-# ──────────────────────────────────────────
-
-class ProjectListView(LoginRequiredMixin, ListView):
-    model               = Project
-    template_name       = 'projects/project_list.html'
-    context_object_name = 'projects'
-    paginate_by         = 10
-
-    def get_queryset(self):
-        # optional ?q= search in the URL
-        query = self.request.GET.get('q', '')
-        qs    = Project.objects.select_related('guide')
-        if query:
-            qs = qs.filter(title__icontains=query)
-        return qs
-
-
-# ──────────────────────────────────────────
-# Project Create (Register)
-# Handles the "Register New Project" form.
-# Uses reversion so every save is versioned.
+# Guide Allotment
+# Coordinator-only page.
+# Lists all projects without a guide +
+# lets coordinator assign one via dropdown.
 # ──────────────────────────────────────────
 
 @login_required
-def register_project(request):
+def allot_guide_list(request):
+    if not is_coordinator(request.user):
+        messages.error(request, 'Only coordinators can allot guides.')
+        return redirect('dashboard')
+
+    # split into two lists for clarity
+    unallotted = Project.objects.filter(guide__isnull=True).prefetch_related('members')
+    allotted   = Project.objects.filter(guide__isnull=False).select_related('guide')
+
+    return render(request, 'projects/admin_allotment.html', {
+        'unallotted': unallotted,
+        'allotted':   allotted,
+    })
+
+
+@login_required
+def allot_guide(request, pk):
+    if not is_coordinator(request.user):
+        messages.error(request, 'Only coordinators can allot guides.')
+        return redirect('dashboard')
+
+    project = get_object_or_404(Project, pk=pk)
+
     if request.method == 'POST':
-        form = ProjectForm(request.POST)
+        form = GuideAllotmentForm(request.POST, instance=project)
         if form.is_valid():
             with reversion.create_revision():
-                project = form.save()
+                form.save()
                 reversion.set_user(request.user)
-                reversion.set_comment('Project registered.')
+                reversion.set_comment(
+                    f'Guide allotted: {project.guide}'
+                )
+            messages.success(
+                request,
+                f'Guide "{project.guide.get_full_name() or project.guide.username}" '
+                f'allotted to "{project.title}".'
+            )
+            return redirect('allot_guide_list')
+    else:
+        form = GuideAllotmentForm(instance=project)
+
+    return render(request, 'projects/allot_guide_form.html', {
+        'form':    form,
+        'project': project,
+    })
+
+
+# ──────────────────────────────────────────
+# Guide Evaluation
+# Guide fills rating + comments after
+# reviewing all milestone uploads.
+# Only the assigned guide can submit.
+# ──────────────────────────────────────────
+
+@login_required
+def evaluate(request, pk):
+    project = get_object_or_404(Project, pk=pk)
+
+    # only the assigned guide can evaluate
+    if not (is_guide(request.user) or is_coordinator(request.user)):
+        messages.error(request, 'Only guides can submit evaluations.')
+        return redirect('dashboard')
+
+    if is_guide(request.user) and project.guide != request.user:
+        messages.error(request, 'You are not the assigned guide for this project.')
+        return redirect('dashboard')
+
+    # get or create the evaluation record for this project
+    evaluation, created = Evaluation.objects.get_or_create(
+        project=project
+    )
+
+    # block re-submission if guide already submitted
+    if evaluation.guide_has_submitted() and is_guide(request.user):
+        messages.warning(
+            request,
+            'You have already submitted the evaluation for this project. '
+            'Awaiting coordinator approval.'
+        )
+        return redirect('project_detail', pk=pk)
+
+    if request.method == 'POST':
+        form = EvaluationForm(request.POST, instance=evaluation)
+        if form.is_valid():
+            eval_obj = form.save(commit=False)
+            eval_obj.guide_submitted_at = timezone.now()
+            eval_obj.save()
 
             messages.success(
                 request,
-                f'Project "{project.title}" registered successfully.'
+                f'Evaluation submitted for "{project.title}". '
+                'The coordinator has been notified.'
             )
-            return redirect('project_detail', pk=project.pk)
+            return redirect('project_detail', pk=pk)
     else:
-        form = ProjectForm()
+        form = EvaluationForm(instance=evaluation)
 
-    return render(request, 'projects/project_form.html', {'form': form})
+    return render(request, 'projects/guide_evaluation.html', {
+        'form':       form,
+        'project':    project,
+        'evaluation': evaluation,
+    })
 
 
 # ──────────────────────────────────────────
-# Project Detail
-# Shows all milestone stages and their
-# current status for one project.
+# Coordinator Approval
+# Coordinator reviews guide evaluation,
+# sets approval + publication status +
+# uploads certificate.
 # ──────────────────────────────────────────
 
-class ProjectDetailView(LoginRequiredMixin, DetailView):
-    model               = Project
-    template_name       = 'projects/project_detail.html'
-    context_object_name = 'project'
+@login_required
+def coordinator_approve(request, pk):
+    if not is_coordinator(request.user):
+        messages.error(request, 'Only coordinators can approve evaluations.')
+        return redirect('dashboard')
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+    project    = get_object_or_404(Project, pk=pk)
+    evaluation = get_object_or_404(Evaluation, project=project)
 
-        # build a dict of stage → milestone object (or None)
-        # so the template can render every stage row cleanly
-        stages = ['synopsis', 'phase1', 'phase2', 'final', 'publication']
-        milestone_map = {}
-        for stage in stages:
-            milestone_map[stage] = Milestone.objects.filter(
-                project=self.object,
-                stage=stage
-            ).first()
+    # coordinator can only act after guide has submitted
+    if not evaluation.guide_has_submitted():
+        messages.warning(
+            request,
+            'The guide has not submitted the evaluation yet.'
+        )
+        return redirect('project_detail', pk=pk)
 
-        context['milestone_map'] = milestone_map
-        context['stages']        = stages
-        context['is_guide']      = is_guide(self.request.user)
-        context['is_coordinator']= is_coordinator(self.request.user)
-        return context
-    
+    if request.method == 'POST':
+        form = CoordinatorApprovalForm(
+            request.POST,
+            request.FILES,
+            instance=evaluation
+        )
+        if form.is_valid():
+            eval_obj = form.save(commit=False)
+            eval_obj.coordinator_approved_at = timezone.now()
+            eval_obj.save()
+
+            messages.success(
+                request,
+                f'Evaluation for "{project.title}" '
+                f'{evaluation.get_coordinator_approval_display()}.'
+            )
+            return redirect('project_detail', pk=pk)
+    else:
+        form = CoordinatorApprovalForm(instance=evaluation)
+
+    return render(request, 'projects/coordinator_approval.html', {
+        'form':       form,
+        'project':    project,
+        'evaluation': evaluation,
+    })
+
 
 # ──────────────────────────────────────────
 # Milestone Upload
-# Students upload a file for a given stage.
-# Every upload creates a new MilestoneVersion
-# row — the file is never overwritten.
 # ──────────────────────────────────────────
 
 STAGE_ORDER = ['synopsis', 'phase1', 'phase2', 'final', 'publication']
@@ -236,34 +320,30 @@ STAGE_ORDER = ['synopsis', 'phase1', 'phase2', 'final', 'publication']
 def upload_milestone(request, pk, stage):
     project = get_object_or_404(Project, pk=pk)
 
-    # make sure the stage name is valid
     if stage not in STAGE_ORDER:
         messages.error(request, 'Invalid milestone stage.')
         return redirect('project_detail', pk=pk)
 
-    # gate check — previous stage must be approved before this one
+    # gate check
     stage_index = STAGE_ORDER.index(stage)
     if stage_index > 0:
-        prev_stage = STAGE_ORDER[stage_index - 1]
+        prev_stage     = STAGE_ORDER[stage_index - 1]
         prev_milestone = Milestone.objects.filter(
             project=project,
             stage=prev_stage
         ).first()
-
         if not prev_milestone or prev_milestone.status != 'approved':
             messages.warning(
                 request,
-                f'You must complete '
+                f'You must complete and get '
                 f'"{prev_stage.replace("phase", "Phase ").title()}" '
-                f'before uploading this stage.'
+                f'approved before uploading this stage.'
             )
             return redirect('project_detail', pk=pk)
 
     if request.method == 'POST':
         form = MilestoneUploadForm(request.POST, request.FILES)
         if form.is_valid():
-
-            # get or create the Milestone row for this stage
             milestone, _ = Milestone.objects.get_or_create(
                 project=project,
                 stage=stage,
@@ -272,27 +352,22 @@ def upload_milestone(request, pk, stage):
                     'submitted_by': request.user,
                 }
             )
-
-            # find the next version number for this milestone
             last_version = milestone.versions.order_by('-version_number').first()
             next_version = (last_version.version_number + 1) if last_version else 1
 
-            # save the new version row with the uploaded file
-            version          = form.save(commit=False)
+            version                = form.save(commit=False)
             version.milestone      = milestone
             version.version_number = next_version
             version.uploaded_by    = request.user
             version.save()
 
-            # mark the milestone as submitted for guide review
             milestone.status       = 'submitted'
             milestone.submitted_by = request.user
             milestone.save()
 
             messages.success(
                 request,
-                f'Version {next_version} uploaded successfully. '
-                'Awaiting guide review.'
+                f'Version {next_version} uploaded. Awaiting guide review.'
             )
             return redirect('project_detail', pk=pk)
     else:
@@ -306,9 +381,7 @@ def upload_milestone(request, pk, stage):
 
 
 # ──────────────────────────────────────────
-# Version History
-# Shows all uploaded versions for one stage.
-# Guides and students can both view this.
+# Milestone History
 # ──────────────────────────────────────────
 
 @login_required
@@ -316,7 +389,6 @@ def milestone_history(request, pk, stage):
     project   = get_object_or_404(Project, pk=pk)
     milestone = get_object_or_404(Milestone, project=project, stage=stage)
     versions  = milestone.versions.order_by('-version_number')
-
     return render(request, 'milestones/history.html', {
         'project':   project,
         'milestone': milestone,
@@ -326,22 +398,18 @@ def milestone_history(request, pk, stage):
 
 # ──────────────────────────────────────────
 # Approve Milestone
-# Guide-only POST action.
-# Moves milestone status to 'approved'
-# and optionally saves marks.
 # ──────────────────────────────────────────
 
 @login_required
 def approve_milestone(request, milestone_id):
     if not is_guide(request.user) and not is_coordinator(request.user):
-        messages.error(request, 'You do not have permission to approve milestones.')
+        messages.error(request, 'Permission denied.')
         return redirect('dashboard')
 
     milestone = get_object_or_404(Milestone, pk=milestone_id)
 
     if request.method == 'POST':
         marks = request.POST.get('marks', '').strip()
-
         with reversion.create_revision():
             milestone.status = 'approved'
             if marks:
@@ -358,21 +426,17 @@ def approve_milestone(request, milestone_id):
             f'{milestone.get_stage_display()} approved for '
             f'"{milestone.project.title}".'
         )
-
     return redirect('project_detail', pk=milestone.project.pk)
 
 
 # ──────────────────────────────────────────
 # Reject Milestone
-# Guide-only POST action.
-# Moves milestone back to 'rejected'
-# so the student can re-upload.
 # ──────────────────────────────────────────
 
 @login_required
 def reject_milestone(request, milestone_id):
     if not is_guide(request.user) and not is_coordinator(request.user):
-        messages.error(request, 'You do not have permission to reject milestones.')
+        messages.error(request, 'Permission denied.')
         return redirect('dashboard')
 
     milestone = get_object_or_404(Milestone, pk=milestone_id)
@@ -386,135 +450,28 @@ def reject_milestone(request, milestone_id):
 
         messages.warning(
             request,
-            f'{milestone.get_stage_display()} rejected for '
-            f'"{milestone.project.title}". Student can re-upload.'
+            f'{milestone.get_stage_display()} rejected. Student can re-upload.'
         )
-
     return redirect('project_detail', pk=milestone.project.pk)
-
 
 
 # ──────────────────────────────────────────
 # AJAX Title Check
-# Called by ajax_search.js as user types.
-# Returns JSON list of similar titles.
-# No login required — runs on the public
-# registration form.
 # ──────────────────────────────────────────
 
 def title_check(request):
     query   = request.GET.get('q', '').strip()
     results = []
-
-    if len(query) >= 3:   # only search once at least 3 chars typed
+    if len(query) >= 3:
         matches = Project.objects.filter(
             title__icontains=query
         ).values_list('title', flat=True)[:5]
         results = list(matches)
-
     return JsonResponse({'titles': results})
 
 
 # ──────────────────────────────────────────
-# CSV Export
-# Coordinator downloads a filtered CSV.
-# Filter params come from GET:
-#   ?guide_id=1   → filter by guide
-#   ?domain=AI    → filter by domain
-# Both are optional — blank = export all.
-# ──────────────────────────────────────────
-
-@login_required
-def export_csv(request):
-    # only coordinators and guides can export
-    if not is_guide(request.user) and not is_coordinator(request.user):
-        messages.error(request, 'You do not have permission to export data.')
-        return redirect('dashboard')
-
-    form = CSVExportForm(request.GET or None)
-
-    # build the queryset
-    qs = Project.objects.select_related('guide').prefetch_related(
-        'members', 'milestones'
-    )
-
-    if form.is_valid():
-        guide  = form.cleaned_data.get('guide')
-        domain = form.cleaned_data.get('domain')
-        if guide:
-            qs = qs.filter(guide=guide)
-        if domain:
-            qs = qs.filter(domain=domain)
-
-    # if it's a download request, stream the CSV
-    if request.GET.get('download'):
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = (
-            'attachment; filename="projectarc_export.csv"'
-        )
-
-        writer = csv.writer(response)
-
-        # header row
-        writer.writerow([
-            'Project Title',
-            'Domain',
-            'Guide',
-            'Team Members',
-            'Stage',
-            'Status',
-            'Marks',
-            'Submitted At',
-        ])
-
-        # one row per milestone per project
-        for project in qs:
-            members_str = ', '.join(
-                m.get_full_name() or m.username
-                for m in project.members.all()
-            )
-            guide_str = (
-                project.guide.get_full_name() or project.guide.username
-                if project.guide else '—'
-            )
-
-            milestones = project.milestones.all()
-            if milestones.exists():
-                for ms in milestones:
-                    writer.writerow([
-                        project.title,
-                        project.get_domain_display(),
-                        guide_str,
-                        members_str,
-                        ms.get_stage_display(),
-                        ms.get_status_display(),
-                        ms.marks if ms.marks is not None else '—',
-                        ms.submitted_at.strftime('%d %b %Y') if ms.submitted_at else '—',
-                    ])
-            else:
-                # project with no milestones yet still appears in export
-                writer.writerow([
-                    project.title,
-                    project.get_domain_display(),
-                    guide_str,
-                    members_str,
-                    '—', '—', '—', '—',
-                ])
-
-        return response
-
-    # if not a download request, show the filter form
-    return render(request, 'exports/confirm.html', {
-        'form':     form,
-        'projects': qs,
-        'count':    qs.count(),
-    })
-
-
-# ──────────────────────────────────────────
-# Notification count
-# Called by the bell badge JS in base.html
-# every 30 seconds. Returns unread count.
+# Notification Count (bell badge)
 # ──────────────────────────────────────────
 
 @login_required
@@ -529,24 +486,19 @@ def notif_count(request):
 
 # ──────────────────────────────────────────
 # Notifications List
-# Coordinator clicks the bell and lands here.
-# Shows all notifications, marks them read.
 # ──────────────────────────────────────────
 
 @login_required
 def notifications_list(request):
     from .signals import Notification
-
-    # only coordinators have notifications
     if not is_coordinator(request.user):
-        messages.error(request, 'You do not have permission to view notifications.')
+        messages.error(request, 'Permission denied.')
         return redirect('dashboard')
 
     notifs = Notification.objects.filter(
         recipient=request.user
     ).order_by('-created_at')
 
-    # mark all as read when the page is opened
     notifs.filter(is_read=False).update(is_read=True)
 
     return render(request, 'notifications/list.html', {
@@ -555,19 +507,109 @@ def notifications_list(request):
 
 
 # ──────────────────────────────────────────
-# Project List view for browsing
-# Supports optional ?q= title search
+# CSV Export
+# Now filters by guide, domain, AND
+# publication status from Evaluation.
 # ──────────────────────────────────────────
 
 @login_required
-def project_list(request):
-    query    = request.GET.get('q', '').strip()
-    projects = Project.objects.select_related('guide').prefetch_related('members')
+def export_csv(request):
+    if not is_guide(request.user) and not is_coordinator(request.user):
+        messages.error(request, 'Permission denied.')
+        return redirect('dashboard')
 
-    if query:
-        projects = projects.filter(title__icontains=query)
+    form = CSVExportForm(request.GET or None)
+    qs   = Project.objects.select_related('guide').prefetch_related(
+        'members', 'milestones', 'evaluation'
+    )
 
-    return render(request, 'projects/project_list.html', {
-        'projects': projects,
-        'query':    query,
+    if form.is_valid():
+        guide              = form.cleaned_data.get('guide')
+        domain             = form.cleaned_data.get('domain')
+        publication_status = form.cleaned_data.get('publication_status')
+
+        if guide:
+            qs = qs.filter(guide=guide)
+        if domain:
+            qs = qs.filter(domain=domain)
+        if publication_status:
+            qs = qs.filter(evaluation__publication_status=publication_status)
+
+    if request.GET.get('download'):
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = (
+            'attachment; filename="projectarc_export.csv"'
+        )
+        writer = csv.writer(response)
+
+        # header row
+        writer.writerow([
+            'Project Title',
+            'Domain',
+            'Guide',
+            'Team Members',
+            'Stage',
+            'Stage Status',
+            'Marks',
+            'Guide Rating',
+            'Coordinator Approval',
+            'Publication Status',
+            'Submitted At',
+        ])
+
+        for project in qs:
+            members_str = ', '.join(
+                m.get_full_name() or m.username
+                for m in project.members.all()
+            )
+            guide_str = (
+                project.guide.get_full_name() or project.guide.username
+                if project.guide else '—'
+            )
+
+            # get evaluation data safely
+            try:
+                ev = project.evaluation
+                guide_rating    = ev.guide_rating or '—'
+                coord_approval  = ev.get_coordinator_approval_display()
+                pub_status      = ev.get_publication_status_display()
+            except Evaluation.DoesNotExist:
+                guide_rating   = '—'
+                coord_approval = '—'
+                pub_status     = '—'
+
+            milestones = project.milestones.all()
+            if milestones.exists():
+                for ms in milestones:
+                    writer.writerow([
+                        project.title,
+                        project.get_domain_display(),
+                        guide_str,
+                        members_str,
+                        ms.get_stage_display(),
+                        ms.get_status_display(),
+                        ms.marks if ms.marks is not None else '—',
+                        guide_rating,
+                        coord_approval,
+                        pub_status,
+                        ms.submitted_at.strftime('%d %b %Y') if ms.submitted_at else '—',
+                    ])
+            else:
+                writer.writerow([
+                    project.title,
+                    project.get_domain_display(),
+                    guide_str,
+                    members_str,
+                    '—', '—', '—',
+                    guide_rating,
+                    coord_approval,
+                    pub_status,
+                    '—',
+                ])
+        return response
+
+    return render(request, 'exports/confirm.html', {
+        'form':     form,
+        'projects': qs,
+        'count':    qs.count(),
     })
