@@ -1,0 +1,313 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ project.title }} — ProjectArc{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── milestone stage card ─────────── */
+  .stage-card {
+    border-left: 4px solid #dee2e6;
+    border-radius: 0 10px 10px 0;
+    transition: border-color .2s;
+  }
+  .stage-card.approved  { border-left-color: #2ecc71; }
+  .stage-card.submitted { border-left-color: #3498db; }
+  .stage-card.rejected  { border-left-color: #e74c3c; }
+  .stage-card.pending   { border-left-color: #bdc3c7; }
+
+  /* ── marks input ──────────────────── */
+  .marks-input {
+    width: 80px;
+    display: inline-block;
+  }
+
+  /* ── version badge ────────────────── */
+  .version-badge {
+    font-size: .72rem;
+    background: #f0f0f0;
+    color: #555;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<!-- ── Breadcrumb ───────────────────────────────── -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item">
+      <a href="{% url 'dashboard' %}">Dashboard</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{% url 'project_list' %}">Projects</a>
+    </li>
+    <li class="breadcrumb-item active">{{ project.title }}</li>
+  </ol>
+</nav>
+
+
+<!-- ── Project header card ─────────────────────── -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="row align-items-center">
+
+      <div class="col-md-8">
+        <h4 class="fw-bold mb-1">{{ project.title }}</h4>
+
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <span class="badge bg-secondary">{{ project.get_domain_display }}</span>
+          <span class="badge bg-dark">
+            <i class="bi bi-person-check"></i>
+            Guide: {{ project.guide.get_full_name|default:project.guide.username|default:'Not assigned' }}
+          </span>
+          <span class="badge bg-info text-dark">
+            <i class="bi bi-people"></i>
+            {{ project.members.count }} member(s)
+          </span>
+        </div>
+
+        {% if project.description %}
+        <p class="text-muted small mb-0">{{ project.description }}</p>
+        {% endif %}
+      </div>
+
+      <div class="col-md-4 text-md-end mt-3 mt-md-0">
+        <!-- overall completion ring -->
+        <div class="mb-1">
+          <span class="fw-semibold">{{ project.completion_percent }}% complete</span>
+        </div>
+        <div class="progress" style="height:10px;border-radius:6px">
+          <div
+            class="progress-bar bg-success"
+            style="width:{{ project.completion_percent }}%"
+          ></div>
+        </div>
+        <small class="text-muted">
+          Current stage: {{ project.current_stage }}
+        </small>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Team members ─────────────────────────────── -->
+<div class="card mb-4">
+  <div class="card-header">
+    <i class="bi bi-people-fill"></i> Team Members
+  </div>
+  <div class="card-body py-2">
+    <div class="d-flex flex-wrap gap-2">
+      {% for member in project.members.all %}
+      <span class="badge bg-light text-dark border py-2 px-3">
+        <i class="bi bi-person-circle"></i>
+        {{ member.get_full_name|default:member.username }}
+      </span>
+      {% empty %}
+      <span class="text-muted small">No members assigned.</span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Milestone stages ─────────────────────────── -->
+<h5 class="fw-bold mb-3">
+  <i class="bi bi-list-check"></i> Milestone Stages
+</h5>
+
+{% with stage_labels=stages %}
+{% for stage in stages %}
+
+  {% with ms=milestone_map|default_if_none:None %}
+
+  {# get the milestone for this stage from the map #}
+  {% with ms=milestone_map %}
+
+  {# Django template can't do dict[key] directly — we use a workaround #}
+  {# The view passes milestone_map as a dict — we iterate and match #}
+
+  {% endwith %}
+  {% endwith %}
+
+{% endfor %}
+{% endwith %}
+
+
+{# ── Cleaner approach: loop over milestone_map items ── #}
+{# The view builds milestone_map as ordered dict                #}
+{# We pass stages list and milestone_map separately             #}
+
+<div class="d-flex flex-column gap-3 mb-4">
+
+  {% for stage in stages %}
+
+    {# resolve this stage's milestone from the map #}
+    {% with ms=milestone_map|default_if_none:'' %}
+    {% endwith %}
+
+    {# We use a template tag workaround — get from dict by key #}
+    {#  milestone_map is {'synopsis': <obj or None>, ...}       #}
+
+    {% for key, val in milestone_map.items %}
+      {% if key == stage %}
+
+        <div class="card stage-card {% if val %}{{ val.status }}{% else %}pending{% endif %}">
+          <div class="card-body">
+            <div class="row align-items-center">
+
+              <!-- stage name + status -->
+              <div class="col-md-4">
+                <div class="d-flex align-items-center gap-2">
+                  {% if val and val.status == 'approved' %}
+                    <i class="bi bi-check-circle-fill text-success fs-5"></i>
+                  {% elif val and val.status == 'submitted' %}
+                    <i class="bi bi-clock-fill text-primary fs-5"></i>
+                  {% elif val and val.status == 'rejected' %}
+                    <i class="bi bi-x-circle-fill text-danger fs-5"></i>
+                  {% else %}
+                    <i class="bi bi-circle text-muted fs-5"></i>
+                  {% endif %}
+
+                  <div>
+                    <div class="fw-semibold">
+                      {% if stage == 'synopsis' %}Synopsis
+                      {% elif stage == 'phase1' %}Phase 1
+                      {% elif stage == 'phase2' %}Phase 2
+                      {% elif stage == 'final' %}Final Report
+                      {% elif stage == 'publication' %}Publication Details
+                      {% endif %}
+                    </div>
+                    <small class="text-muted">
+                      {% if val %}
+                        {{ val.get_status_display }}
+                        {% if val.submitted_at %}
+                          &middot; {{ val.submitted_at|date:"d M Y" }}
+                        {% endif %}
+                      {% else %}
+                        Not uploaded yet
+                      {% endif %}
+                    </small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- marks -->
+              <div class="col-md-2 text-center">
+                {% if val and val.marks %}
+                  <span class="fw-bold text-success fs-5">{{ val.marks }}</span>
+                  <div class="text-muted small">marks</div>
+                {% else %}
+                  <span class="text-muted small">— marks</span>
+                {% endif %}
+              </div>
+
+              <!-- version count -->
+              <div class="col-md-2 text-center">
+                {% if val %}
+                  <span class="version-badge">
+                    <i class="bi bi-clock-history"></i>
+                    {{ val.versions.count }} version(s)
+                  </span>
+                {% endif %}
+              </div>
+
+              <!-- actions -->
+              <div class="col-md-4 text-md-end mt-2 mt-md-0">
+                <div class="d-flex flex-wrap justify-content-md-end gap-2">
+
+                  <!-- version history link -->
+                  {% if val and val.versions.count > 0 %}
+                  
+                    href="{% url 'milestone_history' project.pk stage %}"
+                    class="btn btn-sm btn-outline-secondary"
+                  >
+                    <i class="bi bi-clock-history"></i> History
+                  </a>
+                  {% endif %}
+
+                  <!-- student upload button -->
+                  {% if not is_guide and not is_coordinator %}
+                    {% if not val or val.status == 'rejected' or val.status == 'pending' %}
+                    
+                      href="{% url 'upload_milestone' project.pk stage %}"
+                      class="btn btn-sm btn-dark"
+                    >
+                      <i class="bi bi-upload"></i>
+                      {% if val and val.status == 'rejected' %}Re-upload{% else %}Upload{% endif %}
+                    </a>
+                    {% endif %}
+                  {% endif %}
+
+                  <!-- guide approve / reject block -->
+                  {% if is_guide or is_coordinator %}
+                    {% if val and val.status == 'submitted' %}
+
+                    <!-- approve form with optional marks -->
+                    <form
+                      method="post"
+                      action="{% url 'approve_milestone' val.pk %}"
+                      class="d-inline-flex align-items-center gap-1"
+                    >
+                      {% csrf_token %}
+                      <input
+                        type="number"
+                        name="marks"
+                        class="form-control form-control-sm marks-input"
+                        placeholder="Marks"
+                        min="0" max="100" step="0.5"
+                      />
+                      <button type="submit" class="btn btn-sm btn-success">
+                        <i class="bi bi-check-lg"></i> Approve
+                      </button>
+                    </form>
+
+                    <!-- reject form -->
+                    <form
+                      method="post"
+                      action="{% url 'reject_milestone' val.pk %}"
+                      class="d-inline"
+                    >
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-danger">
+                        <i class="bi bi-x-lg"></i> Reject
+                      </button>
+                    </form>
+
+                    {% elif val and val.status == 'approved' %}
+                    <span class="badge bg-success py-2 px-3">
+                      <i class="bi bi-check-circle"></i> Approved
+                    </span>
+
+                    {% elif val and val.status == 'rejected' %}
+                    <span class="badge bg-danger py-2 px-3">
+                      <i class="bi bi-x-circle"></i> Rejected
+                    </span>
+                    {% endif %}
+                  {% endif %}
+
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      {% endif %}
+    {% endfor %}
+
+  {% endfor %}
+
+</div>
+
+
+<!-- ── back button ──────────────────────────────── -->
+<a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left"></i> Back to Dashboard
+</a>
+
+{% endblock %}

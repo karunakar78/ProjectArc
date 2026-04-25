@@ -1,0 +1,451 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard — ProjectArc{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── stat cards ───────────────────── */
+  .stat-card {
+    border-radius: 12px;
+    padding: 1.2rem 1.5rem;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .stat-card i  { font-size: 2rem; opacity: .8; }
+  .stat-card h2 { margin: 0; font-weight: 700; font-size: 2rem; }
+  .stat-card p  { margin: 0; font-size: .85rem; opacity: .85; }
+
+  /* ── milestone stage row ──────────── */
+  .stage-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: .82rem;
+    padding: 3px 0;
+  }
+  .stage-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot-approved  { background: #2ecc71; }
+  .dot-submitted { background: #3498db; }
+  .dot-rejected  { background: #e74c3c; }
+  .dot-pending   { background: #bdc3c7; }
+
+  /* ── project card ─────────────────── */
+  .project-card {
+    transition: transform .15s, box-shadow .15s;
+  }
+  .project-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,.12) !important;
+  }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<!-- ── Page header ──────────────────────────────── -->
+<div class="page-header">
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <h4>
+        <i class="bi bi-speedometer2"></i>
+        {% if role == 'coordinator' %}Coordinator Dashboard
+        {% elif role == 'guide' %}Guide Dashboard
+        {% else %}Student Dashboard
+        {% endif %}
+      </h4>
+      <small class="text-muted">
+        Welcome back,
+        <strong>{{ user.get_full_name|default:user.username }}</strong>
+      </small>
+    </div>
+
+    <!-- quick action button per role -->
+    {% if role == 'coordinator' %}
+      <a href="{% url 'export_csv' %}" class="btn btn-dark btn-sm">
+        <i class="bi bi-download"></i> Export CSV
+      </a>
+    {% elif role == 'student' %}
+      <a href="{% url 'register_project' %}" class="btn btn-dark btn-sm">
+        <i class="bi bi-plus-circle"></i> New Project
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     COORDINATOR VIEW
+     Shows system-wide stats + all projects
+════════════════════════════════════════ -->
+{% if role == 'coordinator' %}
+
+  <!-- stat cards row -->
+  <div class="row g-3 mb-4">
+
+    <div class="col-md-3">
+      <div class="stat-card bg-dark">
+        <i class="bi bi-folder2-open"></i>
+        <div>
+          <h2>{{ total }}</h2>
+          <p>Total Projects</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="stat-card" style="background:#3498db">
+        <i class="bi bi-people-fill"></i>
+        <div>
+          <h2>{{ projects|length }}</h2>
+          <p>Active Teams</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="stat-card" style="background:#2ecc71">
+        <i class="bi bi-check-circle-fill"></i>
+        <div>
+          <!-- count projects that have at least one approved milestone -->
+          <h2>
+            {{ projects|length }}
+          </h2>
+          <p>In Progress</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="stat-card" style="background:#9b59b6">
+        <i class="bi bi-bar-chart-fill"></i>
+        <div>
+          <h2>3</h2>
+          <p>Domains (AI · ML · IoT)</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- progress chart -->
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-bar-chart"></i> Project Completion Overview</span>
+      <small class="text-muted">% of stages approved per project</small>
+    </div>
+    <div class="card-body">
+      <canvas id="progressChart" height="80"></canvas>
+    </div>
+  </div>
+
+  <!-- all projects table -->
+  <div class="card">
+    <div class="card-header">
+      <i class="bi bi-table"></i> All Projects
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Title</th>
+            <th>Domain</th>
+            <th>Guide</th>
+            <th>Team</th>
+            <th>Progress</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for project in projects %}
+          <tr>
+            <td class="fw-semibold">{{ project.title }}</td>
+            <td>
+              <span class="badge bg-secondary">{{ project.domain }}</span>
+            </td>
+            <td>
+              {{ project.guide.get_full_name|default:project.guide.username|default:'—' }}
+            </td>
+            <td>{{ project.members.count }} member(s)</td>
+            <td>
+              <!-- inline progress bar -->
+              <div class="d-flex align-items-center gap-2">
+                <div class="progress flex-grow-1" style="height:8px">
+                  <div
+                    class="progress-bar bg-success"
+                    style="width:{{ project.completion_percent }}%"
+                  ></div>
+                </div>
+                <small>{{ project.completion_percent }}%</small>
+              </div>
+            </td>
+            <td>
+              
+                href="{% url 'project_detail' project.pk %}"
+                class="btn btn-sm btn-outline-dark"
+              >View</a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-4">
+              No projects registered yet.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+
+<!-- ════════════════════════════════════════
+     GUIDE VIEW
+     Shows only projects assigned to this guide
+════════════════════════════════════════ -->
+{% elif role == 'guide' %}
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="stat-card bg-dark">
+        <i class="bi bi-people-fill"></i>
+        <div>
+          <h2>{{ projects|length }}</h2>
+          <p>Teams assigned to you</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    {% for project in projects %}
+    <div class="col-md-6">
+      <div class="card project-card h-100">
+        <div class="card-body">
+
+          <!-- title + domain -->
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <h6 class="fw-bold mb-0">{{ project.title }}</h6>
+            <span class="badge bg-secondary">{{ project.domain }}</span>
+          </div>
+
+          <!-- team members -->
+          <p class="text-muted small mb-2">
+            <i class="bi bi-people"></i>
+            {% for m in project.members.all %}
+              {{ m.get_full_name|default:m.username }}{% if not forloop.last %}, {% endif %}
+            {% endfor %}
+          </p>
+
+          <!-- milestone stage dots -->
+          <div class="mb-3">
+            {% for stage, label in project.milestones.all|dictsort:"stage" %}
+            {% endfor %}
+
+            {% with synopsis=project.milestones.all %}
+            {% for ms in project.milestones.all %}
+            <div class="stage-row">
+              <div class="stage-dot dot-{{ ms.status }}"></div>
+              <span>{{ ms.get_stage_display }}</span>
+              <span class="ms-auto text-muted">{{ ms.get_status_display }}</span>
+              {% if ms.status == 'submitted' %}
+                <!-- quick approve form inline -->
+                <form
+                  method="post"
+                  action="{% url 'approve_milestone' ms.pk %}"
+                  class="d-inline"
+                >
+                  {% csrf_token %}
+                  <button
+                    class="btn btn-xs btn-success py-0 px-2"
+                    style="font-size:.72rem"
+                    type="submit"
+                  >Approve</button>
+                </form>
+                <form
+                  method="post"
+                  action="{% url 'reject_milestone' ms.pk %}"
+                  class="d-inline"
+                >
+                  {% csrf_token %}
+                  <button
+                    class="btn btn-xs btn-danger py-0 px-2"
+                    style="font-size:.72rem"
+                    type="submit"
+                  >Reject</button>
+                </form>
+              {% endif %}
+            </div>
+            {% empty %}
+            <p class="text-muted small">No uploads yet.</p>
+            {% endfor %}
+            {% endwith %}
+          </div>
+
+          <!-- progress bar -->
+          <div class="d-flex align-items-center gap-2 mb-3">
+            <div class="progress flex-grow-1" style="height:6px">
+              <div
+                class="progress-bar bg-success"
+                style="width:{{ project.completion_percent }}%"
+              ></div>
+            </div>
+            <small class="text-muted">{{ project.completion_percent }}%</small>
+          </div>
+
+          
+            href="{% url 'project_detail' project.pk %}"
+            class="btn btn-sm btn-outline-dark w-100"
+          >
+            <i class="bi bi-eye"></i> View Full Detail
+          </a>
+
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="col">
+      <div class="alert alert-info">
+        No projects have been assigned to you yet.
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+
+<!-- ════════════════════════════════════════
+     STUDENT VIEW
+     Shows only projects the student belongs to
+════════════════════════════════════════ -->
+{% else %}
+
+  {% if not projects %}
+  <div class="text-center py-5">
+    <i class="bi bi-folder-plus fs-1 text-muted"></i>
+    <h5 class="mt-3">You have no projects yet</h5>
+    <p class="text-muted">Register a new project to get started.</p>
+    <a href="{% url 'register_project' %}" class="btn btn-dark">
+      <i class="bi bi-plus-circle"></i> Register Project
+    </a>
+  </div>
+  {% endif %}
+
+  <div class="row g-3">
+    {% for project in projects %}
+    <div class="col-md-6">
+      <div class="card project-card h-100">
+        <div class="card-body">
+
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <h6 class="fw-bold mb-0">{{ project.title }}</h6>
+            <span class="badge bg-secondary">{{ project.domain }}</span>
+          </div>
+
+          <p class="text-muted small mb-1">
+            <i class="bi bi-person-check"></i>
+            Guide:
+            {{ project.guide.get_full_name|default:project.guide.username|default:'Not assigned' }}
+          </p>
+
+          <!-- 5 stage checklist -->
+          <ul class="list-unstyled mt-2 mb-3">
+            {% for ms in project.milestones.all %}
+            <li class="stage-row">
+              <div class="stage-dot dot-{{ ms.status }}"></div>
+              {{ ms.get_stage_display }}
+              <span class="ms-auto text-muted small">
+                {{ ms.get_status_display }}
+              </span>
+            </li>
+            {% empty %}
+            <li class="text-muted small">No stages uploaded yet.</li>
+            {% endfor %}
+          </ul>
+
+          <!-- completion bar -->
+          <div class="d-flex align-items-center gap-2 mb-3">
+            <div class="progress flex-grow-1" style="height:6px">
+              <div
+                class="progress-bar bg-success"
+                style="width:{{ project.completion_percent }}%"
+              ></div>
+            </div>
+            <small>{{ project.completion_percent }}%</small>
+          </div>
+
+          
+            href="{% url 'project_detail' project.pk %}"
+            class="btn btn-sm btn-outline-dark w-100"
+          >
+            <i class="bi bi-eye"></i> View & Upload
+          </a>
+
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+{% endif %}
+
+{% endblock %}
+
+
+{% block extra_js %}
+{% if role == 'coordinator' %}
+<script>
+  // ── Chart.js progress chart ───────────────
+  // builds a horizontal bar showing completion
+  // % for every project the coordinator sees
+
+  const labels = [
+    {% for project in projects %}
+      "{{ project.title|truncatechars:20 }}"{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  const data = [
+    {% for project in projects %}
+      {{ project.completion_percent }}{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  const ctx = document.getElementById('progressChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Completion %',
+        data: data,
+        backgroundColor: data.map(v =>
+          v >= 80 ? '#2ecc71' :
+          v >= 40 ? '#f39c12' : '#e74c3c'
+        ),
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      indexAxis: 'y',    // horizontal bar
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+      },
+      scales: {
+        x: {
+          min: 0,
+          max: 100,
+          ticks: { callback: v => v + '%' }
+        }
+      }
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}
