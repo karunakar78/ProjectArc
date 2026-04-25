@@ -1,52 +1,32 @@
 {% extends 'base.html' %}
-
 {% block title %}All Projects — ProjectArc{% endblock %}
-
 {% block content %}
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-  <h5 class="fw-bold mb-0">
-    <i class="bi bi-folder2-open"></i> All Projects
-  </h5>
+  <h5 class="fw-bold mb-0">All Projects</h5>
   {% if not request.user.is_staff %}
-  <a href="{% url 'register_project' %}" class="btn btn-dark btn-sm">
-    <i class="bi bi-plus-circle"></i> New Project
-  </a>
+  <a href="{% url 'register_project' %}" class="btn btn-dark btn-sm">New Project</a>
   {% endif %}
 </div>
 
-<!-- ── Search bar ────────────────────────────────── -->
-<div class="card mb-4">
-  <div class="card-body py-2">
-    <form method="get" class="d-flex gap-2">
-      <input
-        type="text"
-        name="q"
-        class="form-control form-control-sm"
-        placeholder="Search by project title..."
-        value="{{ query }}"
-        autocomplete="off"
-      />
-      <button type="submit" class="btn btn-dark btn-sm px-3">
-        <i class="bi bi-search"></i>
-      </button>
-      {% if query %}
-      <a href="{% url 'project_list' %}" class="btn btn-outline-secondary btn-sm">
-        Clear
-      </a>
-      {% endif %}
-    </form>
+<form method="get" class="mb-4">
+  <div class="input-group">
+    <input type="text" name="q" class="form-control"
+      placeholder="Search projects..." value="{{ query }}" autocomplete="off"/>
+    <button type="submit" class="btn btn-dark">Search</button>
+    {% if query %}
+    <a href="{% url 'project_list' %}" class="btn btn-outline-secondary">Clear</a>
+    {% endif %}
   </div>
-</div>
+</form>
 
-<!-- ── Results ───────────────────────────────────── -->
 <div class="card">
-  <div class="card-header d-flex justify-content-between">
-    <span><i class="bi bi-table"></i> Projects</span>
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Projects</span>
     <span class="badge bg-secondary">{{ projects|length }} result(s)</span>
   </div>
   <div class="card-body p-0">
-    <table class="table table-hover mb-0">
+    <table class="table table-hover mb-0 align-middle">
       <thead class="table-light">
         <tr>
           <th>Title</th>
@@ -60,46 +40,28 @@
       <tbody>
         {% for project in projects %}
         <tr>
-          <td class="fw-semibold align-middle">
-            {{ project.title|truncatechars:35 }}
+          <td class="fw-semibold">{{ project.title }}</td>
+          <td><span class="badge bg-secondary">{{ project.get_domain_display }}</span></td>
+          <td class="small text-muted">
+            {% if project.guide %}{{ project.guide.get_full_name|default:project.guide.username }}{% else %}—{% endif %}
           </td>
-          <td class="align-middle">
-            <span class="badge bg-secondary">{{ project.domain }}</span>
-          </td>
-          <td class="align-middle small">
-            {{ project.guide.get_full_name|default:project.guide.username|default:'—' }}
-          </td>
-          <td class="align-middle small">
-            {{ project.members.count }} member(s)
-          </td>
-          <td class="align-middle" style="min-width:120px">
+          <td class="small text-muted">{{ project.members.count }} member(s)</td>
+          <td style="min-width:130px">
             <div class="d-flex align-items-center gap-2">
               <div class="progress flex-grow-1" style="height:6px">
-                <div
-                  class="progress-bar bg-success"
-                  style="width:{{ project.completion_percent }}%"
-                ></div>
+                <div class="progress-bar bg-success" style="width:{{ project.completion_percent }}%"></div>
               </div>
               <small>{{ project.completion_percent }}%</small>
             </div>
           </td>
-          <td class="align-middle text-end">
-            
-              href="{% url 'project_detail' project.pk %}"
-              class="btn btn-sm btn-outline-dark"
-            >
-              View
-            </a>
+          <td class="text-end">
+            <a href="{% url 'project_detail' project.pk %}" class="btn btn-sm btn-outline-dark">View</a>
           </td>
         </tr>
         {% empty %}
         <tr>
           <td colspan="6" class="text-center text-muted py-5">
-            {% if query %}
-              No projects matching "<strong>{{ query }}</strong>"
-            {% else %}
-              No projects registered yet.
-            {% endif %}
+            {% if query %}No results for "{{ query }}"{% else %}No projects yet.{% endif %}
           </td>
         </tr>
         {% endfor %}

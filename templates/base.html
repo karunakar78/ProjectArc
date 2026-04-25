@@ -1,128 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{% block title %}ProjectArc{% endblock %}</title>
-
-  <!-- Bootstrap 5 CDN -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  />
-
-  <!-- Bootstrap Icons -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
-    rel="stylesheet"
-  />
-
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
   <style>
-    /* ── global ───────────────────────── */
-    body {
-      background: #f8f9fa;
-      font-family: 'Segoe UI', sans-serif;
-    }
-
-    /* ── navbar ───────────────────────── */
-    .navbar-brand {
-      font-weight: 700;
-      letter-spacing: 1px;
-      font-size: 1.3rem;
-    }
-
-    /* ── sidebar progress bar ─────────── */
-    .stage-bar {
-      height: 8px;
-      border-radius: 4px;
-    }
-
-    /* ── status badges ────────────────── */
+    body { background: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
+    .navbar-brand { font-weight: 700; letter-spacing: 1px; font-size: 1.3rem; }
+    .card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.08); border-radius: 10px; }
+    .card-header { background: white; border-bottom: 1px solid #f0f0f0; font-weight: 600; }
+    .page-header { background: white; border-bottom: 1px solid #e9ecef; padding: 1rem 0; margin-bottom: 1.5rem; }
+    .page-header h4 { margin: 0; font-weight: 700; }
+    .alert { border-radius: 8px; }
     .badge-pending   { background: #95a5a6; }
     .badge-submitted { background: #3498db; }
     .badge-approved  { background: #2ecc71; }
     .badge-rejected  { background: #e74c3c; }
 
-    /* ── notification bell ────────────── */
-    .notif-bell { position: relative; }
-    .notif-count {
+    /* bell wrapper */
+    .notif-wrapper {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+    }
+    .notif-wrapper i {
+      font-size: 1.2rem;
+      color: white;
+    }
+    .notif-badge {
       position: absolute;
-      top: -4px; right: -6px;
+      top: 0px;
+      right: 0px;
       background: #e74c3c;
       color: white;
       font-size: 10px;
-      width: 16px; height: 16px;
-      border-radius: 50%;
+      font-weight: 700;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 3px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
+      line-height: 1;
+      z-index: 100;
     }
-
-    /* ── cards ────────────────────────── */
-    .card {
-      border: none;
-      box-shadow: 0 1px 4px rgba(0,0,0,.08);
-      border-radius: 10px;
-    }
-    .card-header {
-      background: white;
-      border-bottom: 1px solid #f0f0f0;
-      font-weight: 600;
-    }
-
-    /* ── page header strip ────────────── */
-    .page-header {
-      background: white;
-      border-bottom: 1px solid #e9ecef;
-      padding: 1rem 0;
-      margin-bottom: 1.5rem;
-    }
-    .page-header h4 { margin: 0; font-weight: 700; }
-
-    /* ── flash messages ───────────────── */
-    .alert { border-radius: 8px; }
   </style>
-
   {% block extra_css %}{% endblock %}
 </head>
 
 <body>
 
-<!-- ── Navbar ──────────────────────────────────────── -->
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3">
-
   <a class="navbar-brand" href="{% url 'dashboard' %}">
     <i class="bi bi-journal-code"></i> ProjectArc
   </a>
 
-  <button
-    class="navbar-toggler"
-    type="button"
-    data-bs-toggle="collapse"
-    data-bs-target="#mainNav"
-  >
+  <button class="navbar-toggler" type="button"
+    data-bs-toggle="collapse" data-bs-target="#mainNav">
     <span class="navbar-toggler-icon"></span>
   </button>
 
   <div class="collapse navbar-collapse" id="mainNav">
-
-    <!-- left nav links — shown only when logged in -->
     {% if user.is_authenticated %}
     <ul class="navbar-nav me-auto">
-
       <li class="nav-item">
         <a class="nav-link" href="{% url 'dashboard' %}">
           <i class="bi bi-speedometer2"></i> Dashboard
         </a>
       </li>
-
       <li class="nav-item">
         <a class="nav-link" href="{% url 'project_list' %}">
           <i class="bi bi-folder2-open"></i> Projects
         </a>
       </li>
-
-      <!-- register link — students and coordinators -->
       {% if not user.is_staff or user.is_superuser %}
       <li class="nav-item">
         <a class="nav-link" href="{% url 'register_project' %}">
@@ -130,8 +86,6 @@
         </a>
       </li>
       {% endif %}
-
-      <!-- export — guides and coordinators only -->
       {% if user.is_staff %}
       <li class="nav-item">
         <a class="nav-link" href="{% url 'export_csv' %}">
@@ -139,32 +93,23 @@
         </a>
       </li>
       {% endif %}
-
     </ul>
     {% endif %}
 
-    <!-- right side — notification bell + user info -->
     <ul class="navbar-nav ms-auto align-items-center">
-
       {% if user.is_authenticated %}
 
-        <!-- notification bell — coordinators only -->
         {% if user.is_superuser %}
-        <li class="nav-item me-3">
-          
-            class="nav-link notif-bell"
-            href="{% url 'notifications_list' %}"
-            id="notif-bell"
-            title="Notifications"
-          >
-            <i class="bi bi-bell-fill"></i>
-            <!-- badge count injected by JS -->
-            <span class="notif-count d-none" id="notif-count">0</span>
+        <li class="nav-item me-2">
+          <a href="{% url 'notifications_list' %}" class="nav-link p-0">
+            <div class="notif-wrapper">
+              <i class="bi bi-bell-fill"></i>
+              <span class="notif-badge d-none" id="notif-badge">0</span>
+            </div>
           </a>
         </li>
         {% endif %}
 
-        <!-- username + role tag -->
         <li class="nav-item me-2">
           <span class="navbar-text text-light">
             <i class="bi bi-person-circle"></i>
@@ -179,7 +124,6 @@
           </span>
         </li>
 
-        <!-- logout -->
         <li class="nav-item">
           <form method="post" action="{% url 'logout' %}">
             {% csrf_token %}
@@ -194,75 +138,43 @@
           <a class="nav-link" href="{% url 'login' %}">Login</a>
         </li>
       {% endif %}
-
     </ul>
-
   </div>
 </nav>
-<!-- ── end navbar ──────────────────────────────────── -->
 
-
-<!-- ── Flash messages ─────────────────────────────── -->
 <div class="container mt-3">
   {% if messages %}
     {% for message in messages %}
-      <div
-        class="alert alert-{{ message.tags }} alert-dismissible fade show"
-        role="alert"
-      >
-        {{ message }}
-        <button
-          type="button"
-          class="btn-close"
-          data-bs-dismiss="alert"
-        ></button>
-      </div>
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+      {{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
     {% endfor %}
   {% endif %}
 </div>
-<!-- ── end flash messages ─────────────────────────── -->
 
-
-<!-- ── Page content ───────────────────────────────── -->
 <main class="container my-4">
   {% block content %}{% endblock %}
 </main>
-<!-- ── end page content ───────────────────────────── -->
 
-
-<!-- ── Footer ─────────────────────────────────────── -->
 <footer class="text-center text-muted py-4 mt-5 border-top">
-  <small>
-    ProjectArc &mdash; Capstone Milestone Tracker &mdash;
-    {% now "Y" %} &middot;
-    Built with Django
-  </small>
+  <small>ProjectArc &mdash; Capstone Milestone Tracker &mdash; {% now "Y" %}</small>
 </footer>
-<!-- ── end footer ─────────────────────────────────── -->
 
-
-<!-- ── Scripts ────────────────────────────────────── -->
-
-<!-- Bootstrap 5 JS bundle (includes Popper) -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
-<!-- jQuery — needed for AJAX title check -->
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-
-<!-- Chart.js — used on dashboard for progress bars -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 
-<!-- Notification bell badge — coordinator only -->
 {% if user.is_authenticated and user.is_superuser %}
 <script>
-  // poll for unread notification count every 30 seconds
   function loadNotifCount() {
     $.get('{% url "notif_count" %}', function(data) {
-      var count = data.count;
-      if (count > 0) {
-        $('#notif-count').text(count).removeClass('d-none');
+      var badge = document.getElementById('notif-badge');
+      if (data.count > 0) {
+        badge.textContent = data.count;
+        badge.classList.remove('d-none');
       } else {
-        $('#notif-count').addClass('d-none');
+        badge.classList.add('d-none');
       }
     });
   }
@@ -272,7 +184,5 @@
 {% endif %}
 
 {% block extra_js %}{% endblock %}
-<!-- ── end scripts ────────────────────────────────── -->
-
 </body>
 </html>
