@@ -2,33 +2,84 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path("dashboard/", views.dashboard, name="dashboard"),
-    path("projects/", views.ProjectListView.as_view(), name="project_list"),
-    path("projects/new/", views.register_project, name="register_project"),
+
+    # ── Dashboard ─────────────────────────────────
     path(
-        "projects/<int:pk>/", views.ProjectDetailView.as_view(), name="project_detail"
+        'dashboard/',
+        views.dashboard,
+        name='dashboard'
     ),
+
+    # ── Projects ──────────────────────────────────
     path(
-        "projects/<int:pk>/upload/<str:stage>/",
+        'projects/',
+        views.project_list,
+        name='project_list'
+    ),
+
+    path(
+        'projects/new/',
+        views.register_project,
+        name='register_project'
+    ),
+
+    path(
+        'projects/<int:pk>/',
+        views.ProjectDetailView.as_view(),
+        name='project_detail'
+    ),
+
+    # ── Milestones ────────────────────────────────
+    path(
+        'projects/<int:pk>/upload/<str:stage>/',
         views.upload_milestone,
-        name="upload_milestone",
+        name='upload_milestone'
     ),
+
     path(
-        "projects/<int:pk>/history/<str:stage>/",
+        'projects/<int:pk>/history/<str:stage>/',
         views.milestone_history,
-        name="milestone_history",
+        name='milestone_history'
     ),
+
+    # ── Guide actions ─────────────────────────────
     path(
-        "milestones/<int:milestone_id>/approve/",
+        'milestones/<int:milestone_id>/approve/',
         views.approve_milestone,
-        name="approve_milestone",
+        name='approve_milestone'
     ),
+
     path(
-        "milestones/<int:milestone_id>/reject/",
+        'milestones/<int:milestone_id>/reject/',
         views.reject_milestone,
-        name="reject_milestone",
+        name='reject_milestone'
     ),
-    path("api/title-check/", views.title_check, name="title_check"),
-    path("export/", views.export_csv, name="export_csv"),
-    path("api/notif-count/", views.notif_count, name="notif_count"),
+
+    # ── AJAX ──────────────────────────────────────
+    path(
+        'api/title-check/',
+        views.title_check,
+        name='title_check'
+    ),
+
+    path(
+        'api/notif-count/',
+        views.notif_count,
+        name='notif_count'
+    ),
+
+    # ── Exports ───────────────────────────────────
+    path(
+        'export/',
+        views.export_csv,
+        name='export_csv'
+    ),
+
+    # ── Notifications ─────────────────────────────
+    path(
+        'notifications/',
+        views.notifications_list,
+        name='notifications_list'
+    ),
+
 ]

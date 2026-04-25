@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}Notifications — ProjectArc{% endblock %}
+
+{% block content %}
+
+<div class="page-header mb-4">
+  <h4>
+    <i class="bi bi-bell-fill"></i> Notifications
+  </h4>
+  <small class="text-muted">
+    System alerts for coordinator actions
+  </small>
+</div>
+
+{% if notifications %}
+
+<div class="d-flex flex-column gap-3">
+  {% for notif in notifications %}
+  <div class="card {% if not notif.is_read %}border-primary{% endif %}">
+    <div class="card-body d-flex align-items-start gap-3">
+
+      <!-- icon -->
+      <div
+        class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+        style="width:40px;height:40px;background:#eaf4fd"
+      >
+        <i class="bi bi-check-circle-fill text-primary"></i>
+      </div>
+
+      <!-- message -->
+      <div class="flex-grow-1">
+        <div class="fw-semibold small mb-1">
+          Phase 1 Completion Alert
+        </div>
+        <div class="text-muted small">
+          {{ notif.message }}
+        </div>
+        <div class="text-muted mt-1" style="font-size:.75rem">
+          <i class="bi bi-clock"></i>
+          {{ notif.created_at|date:"d M Y" }}
+          at {{ notif.created_at|time:"H:i" }}
+        </div>
+      </div>
+
+      <!-- read badge -->
+      <div>
+        {% if notif.is_read %}
+          <span class="badge bg-light text-muted border">Read</span>
+        {% else %}
+          <span class="badge bg-primary">New</span>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+
+<!-- empty state -->
+<div class="text-center py-5">
+  <i class="bi bi-bell-slash fs-1 text-muted"></i>
+  <h6 class="mt-3">No notifications yet</h6>
+  <p class="text-muted small">
+    You will be notified here when all teams under
+    a guide complete Phase 1.
+  </p>
+</div>
+
+{% endif %}
+
+{% endblock %}

@@ -525,3 +525,49 @@ def notif_count(request):
         is_read=False
     ).count()
     return JsonResponse({'count': count})
+
+
+# ──────────────────────────────────────────
+# Notifications List
+# Coordinator clicks the bell and lands here.
+# Shows all notifications, marks them read.
+# ──────────────────────────────────────────
+
+@login_required
+def notifications_list(request):
+    from .signals import Notification
+
+    # only coordinators have notifications
+    if not is_coordinator(request.user):
+        messages.error(request, 'You do not have permission to view notifications.')
+        return redirect('dashboard')
+
+    notifs = Notification.objects.filter(
+        recipient=request.user
+    ).order_by('-created_at')
+
+    # mark all as read when the page is opened
+    notifs.filter(is_read=False).update(is_read=True)
+
+    return render(request, 'notifications/list.html', {
+        'notifications': notifs
+    })
+
+
+# ──────────────────────────────────────────
+# Project List view for browsing
+# Supports optional ?q= title search
+# ──────────────────────────────────────────
+
+@login_required
+def project_list(request):
+    query    = request.GET.get('q', '').strip()
+    projects = Project.objects.select_related('guide').prefetch_related('members')
+
+    if query:
+        projects = projects.filter(title__icontains=query)
+
+    return render(request, 'projects/project_list.html', {
+        'projects': projects,
+        'query':    query,
+    })
