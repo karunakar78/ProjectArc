@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+
+{% block title %}Export CSV — ProjectArc{% endblock %}
+
+{% block content %}
+
+<div class="page-header mb-4">
+  <h4><i class="bi bi-download"></i> Export Project Data</h4>
+  <small class="text-muted">
+    Filter by guide or domain then download as CSV
+  </small>
+</div>
+
+<div class="row">
+
+  <!-- ── Filter form ──────────────────────────── -->
+  <div class="col-md-4">
+    <div class="card mb-4">
+      <div class="card-header">
+        <i class="bi bi-funnel"></i> Filters
+      </div>
+      <div class="card-body">
+        <form method="get" id="filter-form">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Guide</label>
+            {{ form.guide }}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Domain</label>
+            {{ form.domain }}
+          </div>
+
+          <div class="d-grid gap-2">
+            <!-- preview — same page, no download -->
+            <button type="submit" class="btn btn-outline-dark btn-sm">
+              <i class="bi bi-eye"></i> Preview Results
+            </button>
+
+            <!-- download — adds ?download=1 to the query string -->
+            <button
+              type="submit"
+              class="btn btn-dark btn-sm"
+              id="download-btn"
+            >
+              <i class="bi bi-file-earmark-spreadsheet"></i>
+              Download CSV
+            </button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── Preview table ────────────────────────── -->
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between">
+        <span>
+          <i class="bi bi-table"></i> Preview
+        </span>
+        <span class="badge bg-secondary">
+          {{ count }} project(s)
+        </span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Title</th>
+                <th>Domain</th>
+                <th>Guide</th>
+                <th>Members</th>
+                <th>Progress</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for project in projects %}
+              <tr>
+                <td class="fw-semibold small">
+                  
+                    href="{% url 'project_detail' project.pk %}"
+                    class="text-dark text-decoration-none"
+                  >
+                    {{ project.title|truncatechars:30 }}
+                  </a>
+                </td>
+                <td>
+                  <span class="badge bg-secondary">
+                    {{ project.domain }}
+                  </span>
+                </td>
+                <td class="small">
+                  {{ project.guide.get_full_name|default:project.guide.username|default:'—' }}
+                </td>
+                <td class="small">
+                  {{ project.members.count }} member(s)
+                </td>
+                <td>
+                  <div class="d-flex align-items-center gap-1">
+                    <div class="progress flex-grow-1" style="height:6px">
+                      <div
+                        class="progress-bar bg-success"
+                        style="width:{{ project.completion_percent }}%"
+                      ></div>
+                    </div>
+                    <small>{{ project.completion_percent }}%</small>
+                  </div>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="text-center text-muted py-4">
+                  No projects match the selected filters.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+  // when Download CSV is clicked, inject ?download=1
+  // into the form action before submitting
+  document.getElementById('download-btn').addEventListener('click', function (e) {
+    e.preventDefault();
+    var form   = document.getElementById('filter-form');
+    var action = form.action || window.location.pathname;
+
+    // collect current filter values
+    var params = new URLSearchParams(new FormData(form));
+    params.set('download', '1');
+
+    // navigate to the download URL
+    window.location.href = action + '?' + params.toString();
+  });
+</script>
+{% endblock %}
