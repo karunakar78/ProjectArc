@@ -11,15 +11,7 @@
     .navbar-brand { font-weight: 700; letter-spacing: 1px; font-size: 1.3rem; }
     .card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.08); border-radius: 10px; }
     .card-header { background: white; border-bottom: 1px solid #f0f0f0; font-weight: 600; }
-    .page-header { background: white; border-bottom: 1px solid #e9ecef; padding: 1rem 0; margin-bottom: 1.5rem; }
-    .page-header h4 { margin: 0; font-weight: 700; }
     .alert { border-radius: 8px; }
-    .badge-pending   { background: #95a5a6; }
-    .badge-submitted { background: #3498db; }
-    .badge-approved  { background: #2ecc71; }
-    .badge-rejected  { background: #e74c3c; }
-
-    /* bell wrapper */
     .notif-wrapper {
       position: relative;
       display: inline-flex;
@@ -28,10 +20,7 @@
       width: 36px;
       height: 36px;
     }
-    .notif-wrapper i {
-      font-size: 1.2rem;
-      color: white;
-    }
+    .notif-wrapper i { font-size: 1.2rem; color: white; }
     .notif-badge {
       position: absolute;
       top: 0px;
@@ -53,14 +42,12 @@
   </style>
   {% block extra_css %}{% endblock %}
 </head>
-
 <body>
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3">
   <a class="navbar-brand" href="{% url 'dashboard' %}">
     <i class="bi bi-journal-code"></i> ProjectArc
   </a>
-
   <button class="navbar-toggler" type="button"
     data-bs-toggle="collapse" data-bs-target="#mainNav">
     <span class="navbar-toggler-icon"></span>
@@ -69,16 +56,19 @@
   <div class="collapse navbar-collapse" id="mainNav">
     {% if user.is_authenticated %}
     <ul class="navbar-nav me-auto">
+
       <li class="nav-item">
         <a class="nav-link" href="{% url 'dashboard' %}">
           <i class="bi bi-speedometer2"></i> Dashboard
         </a>
       </li>
+
       <li class="nav-item">
         <a class="nav-link" href="{% url 'project_list' %}">
           <i class="bi bi-folder2-open"></i> Projects
         </a>
       </li>
+
       {% if not user.is_staff or user.is_superuser %}
       <li class="nav-item">
         <a class="nav-link" href="{% url 'register_project' %}">
@@ -86,6 +76,15 @@
         </a>
       </li>
       {% endif %}
+
+      {% if user.is_superuser %}
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'allot_guide_list' %}">
+          <i class="bi bi-person-check"></i> Allot Guide
+        </a>
+      </li>
+      {% endif %}
+
       {% if user.is_staff %}
       <li class="nav-item">
         <a class="nav-link" href="{% url 'export_csv' %}">
@@ -93,6 +92,7 @@
         </a>
       </li>
       {% endif %}
+
     </ul>
     {% endif %}
 

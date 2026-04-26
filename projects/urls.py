@@ -29,6 +29,36 @@ urlpatterns = [
         name='project_detail'
     ),
 
+    # ── Guide Allotment ───────────────────────────
+    # coordinator sees all projects + allotment status
+    path(
+        'allot-guide/',
+        views.allot_guide_list,
+        name='allot_guide_list'
+    ),
+
+    # coordinator assigns guide to a specific project
+    path(
+        'allot-guide/<int:pk>/',
+        views.allot_guide,
+        name='allot_guide'
+    ),
+
+    # ── Evaluation ────────────────────────────────
+    # guide submits rating + comments
+    path(
+        'evaluate/<int:pk>/',
+        views.evaluate,
+        name='evaluate'
+    ),
+
+    # coordinator approves + sets publication status
+    path(
+        'coordinator/approve/<int:pk>/',
+        views.coordinator_approve,
+        name='coordinator_approve'
+    ),
+
     # ── Milestones ────────────────────────────────
     path(
         'projects/<int:pk>/upload/<str:stage>/',
