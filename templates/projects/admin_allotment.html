@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% block title %}Guide Allotment — ProjectArc{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h4 class="fw-bold mb-0">
+      <i class="bi bi-person-check"></i> Guide Allotment
+    </h4>
+    <small class="text-muted">Assign faculty guides to registered projects</small>
+  </div>
+  <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i> Dashboard
+  </a>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="rounded-3 p-3 text-white d-flex align-items-center gap-3"
+      style="background:#e74c3c">
+      <i class="bi bi-exclamation-circle fs-2 opacity-75"></i>
+      <div>
+        <div class="fw-bold fs-4">{{ unallotted|length }}</div>
+        <div class="small opacity-90">Awaiting guide</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="rounded-3 p-3 text-white d-flex align-items-center gap-3"
+      style="background:#2ecc71">
+      <i class="bi bi-check-circle fs-2 opacity-75"></i>
+      <div>
+        <div class="fw-bold fs-4">{{ allotted|length }}</div>
+        <div class="small opacity-90">Guide assigned</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="rounded-3 p-3 text-white d-flex align-items-center gap-3"
+      style="background:#3498db">
+      <i class="bi bi-folder2-open fs-2 opacity-75"></i>
+      <div>
+        <div class="fw-bold fs-4">
+          {{ unallotted|length|add:allotted|length }}
+        </div>
+        <div class="small opacity-90">Total projects</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if unallotted %}
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>
+      <i class="bi bi-exclamation-circle text-danger"></i>
+      Unallotted Projects
+    </span>
+    <span class="badge bg-danger">{{ unallotted|length }}</span>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Title</th>
+          <th>Domain</th>
+          <th>Team</th>
+          <th>Registered</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for project in unallotted %}
+        <tr>
+          <td class="fw-semibold">{{ project.title }}</td>
+          <td>
+            <span class="badge bg-secondary">{{ project.get_domain_display }}</span>
+          </td>
+          <td class="small text-muted">
+            {% for m in project.members.all %}
+              {{ m.get_full_name|default:m.username }}{% if not forloop.last %}, {% endif %}
+            {% empty %}
+              No members
+            {% endfor %}
+          </td>
+          <td class="small text-muted">{{ project.created_at|date:"d M Y" }}</td>
+          <td class="text-end">
+            <a href="{% url 'allot_guide' project.pk %}"
+              class="btn btn-sm btn-dark">
+              <i class="bi bi-person-plus"></i> Allot Guide
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-success mb-4">
+  <i class="bi bi-check-circle"></i>
+  All projects have been allotted a guide.
+</div>
+{% endif %}
+
+{% if allotted %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>
+      <i class="bi bi-check-circle text-success"></i>
+      Allotted Projects
+    </span>
+    <span class="badge bg-success">{{ allotted|length }}</span>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Title</th>
+          <th>Domain</th>
+          <th>Guide</th>
+          <th>Progress</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for project in allotted %}
+        <tr>
+          <td class="fw-semibold">{{ project.title }}</td>
+          <td>
+            <span class="badge bg-secondary">{{ project.get_domain_display }}</span>
+          </td>
+          <td class="small">
+            <i class="bi bi-person-circle text-muted"></i>
+            {{ project.guide.get_full_name|default:project.guide.username }}
+          </td>
+          <td style="min-width:130px">
+            <div class="d-flex align-items-center gap-2">
+              <div class="progress flex-grow-1" style="height:6px">
+                <div class="progress-bar bg-success"
+                  style="width:{{ project.completion_percent }}%"></div>
+              </div>
+              <small>{{ project.completion_percent }}%</small>
+            </div>
+          </td>
+          <td class="text-end">
+            <a href="{% url 'allot_guide' project.pk %}"
+              class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-pencil"></i> Change
+            </a>
+            <a href="{% url 'project_detail' project.pk %}"
+              class="btn btn-sm btn-outline-dark ms-1">
+              <i class="bi bi-eye"></i> View
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

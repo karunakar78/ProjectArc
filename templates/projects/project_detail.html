@@ -8,6 +8,7 @@
   .stage-rejected  { border-left-color: #e74c3c; }
   .stage-pending   { border-left-color: #bdc3c7; }
   .marks-input { width: 90px; display: inline-block; }
+  .eval-section { border-left: 4px solid #9b59b6; border-radius: 0 10px 10px 0; }
 </style>
 {% endblock %}
 
@@ -29,16 +30,26 @@
         <div class="d-flex flex-wrap gap-2 mb-2">
           <span class="badge bg-secondary">{{ project.get_domain_display }}</span>
           <span class="badge bg-dark">
-            Guide: {% if project.guide %}{{ project.guide.get_full_name|default:project.guide.username }}{% else %}Not assigned{% endif %}
+            Guide:
+            {% if project.guide %}
+              {{ project.guide.get_full_name|default:project.guide.username }}
+            {% else %}
+              Not assigned yet
+            {% endif %}
           </span>
-          <span class="badge bg-info text-dark">{{ project.members.count }} member(s)</span>
+          <span class="badge bg-info text-dark">
+            {{ project.members.count }} member(s)
+          </span>
         </div>
-        {% if project.description %}<p class="text-muted small mb-0">{{ project.description }}</p>{% endif %}
+        {% if project.description %}
+        <p class="text-muted small mb-0">{{ project.description }}</p>
+        {% endif %}
       </div>
       <div class="col-md-4 text-md-end mt-3 mt-md-0">
         <div class="fw-semibold mb-1">{{ project.completion_percent }}% complete</div>
         <div class="progress mb-1" style="height:10px">
-          <div class="progress-bar bg-success" style="width:{{ project.completion_percent }}%"></div>
+          <div class="progress-bar bg-success"
+            style="width:{{ project.completion_percent }}%"></div>
         </div>
         <small class="text-muted">Current: {{ project.current_stage }}</small>
       </div>
@@ -59,32 +70,47 @@
   </div>
 </div>
 
-<h5 class="fw-bold mb-3">Milestone Stages</h5>
+<h5 class="fw-bold mb-3">
+  <i class="bi bi-list-check"></i> Milestone Stages
+</h5>
 
 {% for stage in stages %}
   {% for map_key, ms in milestone_map.items %}
   {% if map_key == stage %}
-  <div class="card stage-card {% if ms %}stage-{{ ms.status }}{% else %}stage-pending{% endif %}">
+  <div class="card stage-card
+    {% if ms %}stage-{{ ms.status }}{% else %}stage-pending{% endif %}">
     <div class="card-body py-3">
       <div class="row align-items-center g-2">
 
         <div class="col-md-4">
           <div class="d-flex align-items-center gap-2">
-            {% if ms and ms.status == 'approved' %}<i class="bi bi-check-circle-fill text-success fs-5"></i>
-            {% elif ms and ms.status == 'submitted' %}<i class="bi bi-clock-fill text-primary fs-5"></i>
-            {% elif ms and ms.status == 'rejected' %}<i class="bi bi-x-circle-fill text-danger fs-5"></i>
-            {% else %}<i class="bi bi-circle text-muted fs-5"></i>{% endif %}
+            {% if ms and ms.status == 'approved' %}
+              <i class="bi bi-check-circle-fill text-success fs-5"></i>
+            {% elif ms and ms.status == 'submitted' %}
+              <i class="bi bi-clock-fill text-primary fs-5"></i>
+            {% elif ms and ms.status == 'rejected' %}
+              <i class="bi bi-x-circle-fill text-danger fs-5"></i>
+            {% else %}
+              <i class="bi bi-circle text-muted fs-5"></i>
+            {% endif %}
             <div>
               <div class="fw-semibold">
                 {% if stage == 'synopsis' %}Synopsis
                 {% elif stage == 'phase1' %}Phase 1
                 {% elif stage == 'phase2' %}Phase 2
                 {% elif stage == 'final' %}Final Report
-                {% elif stage == 'publication' %}Publication Details{% endif %}
+                {% elif stage == 'publication' %}Publication Details
+                {% endif %}
               </div>
               <small class="text-muted">
-                {% if ms %}{{ ms.get_status_display }}{% if ms.submitted_at %} &middot; {{ ms.submitted_at|date:"d M Y" }}{% endif %}
-                {% else %}Not uploaded yet{% endif %}
+                {% if ms %}
+                  {{ ms.get_status_display }}
+                  {% if ms.submitted_at %}
+                    &middot; {{ ms.submitted_at|date:"d M Y" }}
+                  {% endif %}
+                {% else %}
+                  Not uploaded yet
+                {% endif %}
               </small>
             </div>
           </div>
@@ -94,7 +120,9 @@
           {% if ms and ms.marks is not None %}
           <span class="fw-bold text-success fs-5">{{ ms.marks }}</span>
           <div class="text-muted small">marks</div>
-          {% else %}<span class="text-muted small">— marks</span>{% endif %}
+          {% else %}
+          <span class="text-muted small">— marks</span>
+          {% endif %}
         </div>
 
         <div class="col-md-2 text-center">
@@ -107,14 +135,17 @@
 
         <div class="col-md-4">
           <div class="d-flex flex-wrap justify-content-md-end gap-2">
-
             {% if ms and ms.versions.count > 0 %}
-            <a href="{% url 'milestone_history' project.pk stage %}" class="btn btn-sm btn-outline-secondary">History</a>
+            <a href="{% url 'milestone_history' project.pk stage %}"
+              class="btn btn-sm btn-outline-secondary">
+              History
+            </a>
             {% endif %}
 
             {% if not is_guide and not is_coordinator %}
               {% if not ms or ms.status == 'pending' or ms.status == 'rejected' %}
-              <a href="{% url 'upload_milestone' project.pk stage %}" class="btn btn-sm btn-dark">
+              <a href="{% url 'upload_milestone' project.pk stage %}"
+                class="btn btn-sm btn-dark">
                 {% if ms and ms.status == 'rejected' %}Re-upload{% else %}Upload{% endif %}
               </a>
               {% endif %}
@@ -122,13 +153,16 @@
 
             {% if is_guide or is_coordinator %}
               {% if ms and ms.status == 'submitted' %}
-              <form method="post" action="{% url 'approve_milestone' ms.pk %}" class="d-inline-flex align-items-center gap-1">
+              <form method="post" action="{% url 'approve_milestone' ms.pk %}"
+                class="d-inline-flex align-items-center gap-1">
                 {% csrf_token %}
                 <input type="number" name="marks" placeholder="Marks"
-                  class="form-control form-control-sm marks-input" min="0" max="100" step="0.5"/>
+                  class="form-control form-control-sm marks-input"
+                  min="0" max="100" step="0.5"/>
                 <button type="submit" class="btn btn-sm btn-success">Approve</button>
               </form>
-              <form method="post" action="{% url 'reject_milestone' ms.pk %}" class="d-inline">
+              <form method="post" action="{% url 'reject_milestone' ms.pk %}"
+                class="d-inline">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-sm btn-danger">Reject</button>
               </form>
@@ -149,8 +183,120 @@
   {% endfor %}
 {% endfor %}
 
-<div class="mt-4">
-  <a href="{% url 'project_list' %}" class="btn btn-outline-secondary btn-sm">Back to Projects</a>
+
+<h5 class="fw-bold mb-3 mt-4">
+  <i class="bi bi-star-fill text-warning"></i> Evaluation
+</h5>
+
+<div class="card eval-section mb-4">
+  <div class="card-body">
+    {% if evaluation %}
+      <div class="row">
+        <div class="col-md-6">
+          <div class="mb-2">
+            <span class="text-muted small">Guide Rating</span>
+            <div class="fw-bold fs-4">
+              {% if evaluation.guide_rating %}
+                {{ evaluation.guide_rating }}/10
+              {% else %}
+                Not submitted yet
+              {% endif %}
+            </div>
+          </div>
+          <div class="mb-2">
+            <span class="text-muted small">Coordinator Approval</span>
+            <div>
+              <span class="badge
+                {% if evaluation.coordinator_approval == 'approved' %}bg-success
+                {% elif evaluation.coordinator_approval == 'rejected' %}bg-danger
+                {% else %}bg-warning text-dark{% endif %}
+                py-2 px-3">
+                {{ evaluation.get_coordinator_approval_display }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="mb-2">
+            <span class="text-muted small">Publication Status</span>
+            <div class="fw-semibold">
+              {{ evaluation.get_publication_status_display }}
+            </div>
+          </div>
+          {% if evaluation.certificate_copy %}
+          <div class="mb-2">
+            <span class="text-muted small">Certificate</span>
+            <div>
+              <a href="{{ evaluation.certificate_copy.url }}"
+                target="_blank"
+                class="btn btn-sm btn-outline-success">
+                <i class="bi bi-download"></i> Download Certificate
+              </a>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if evaluation.guide_comments %}
+      <div class="mt-2">
+        <span class="text-muted small">Guide Comments</span>
+        <div class="bg-light rounded p-2 small mt-1">
+          {{ evaluation.guide_comments|truncatechars:200 }}
+        </div>
+      </div>
+      {% endif %}
+
+    {% else %}
+      <div class="text-muted small py-2">
+        <i class="bi bi-info-circle"></i>
+        No evaluation submitted yet.
+        {% if is_guide and project.guide == request.user %}
+          You can submit one below.
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <div class="d-flex gap-2 mt-3">
+      {% if is_guide and project.guide == request.user %}
+        {% if not evaluation or not evaluation.guide_has_submitted %}
+        <a href="{% url 'evaluate' project.pk %}" class="btn btn-dark btn-sm">
+          <i class="bi bi-star"></i> Submit Evaluation
+        </a>
+        {% else %}
+        <a href="{% url 'evaluate' project.pk %}" class="btn btn-outline-dark btn-sm">
+          <i class="bi bi-eye"></i> View Evaluation
+        </a>
+        {% endif %}
+      {% endif %}
+
+      {% if is_coordinator %}
+        {% if evaluation and evaluation.guide_has_submitted %}
+        <a href="{% url 'coordinator_approve' project.pk %}"
+          class="btn btn-dark btn-sm">
+          <i class="bi bi-shield-check"></i>
+          {% if evaluation.coordinator_approval == 'pending' %}
+            Review and Approve
+          {% else %}
+            Update Decision
+          {% endif %}
+        </a>
+        {% else %}
+        <span class="text-muted small">
+          <i class="bi bi-clock"></i>
+          Waiting for guide to submit evaluation
+        </span>
+        {% endif %}
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+<div class="mt-2">
+  <a href="{% url 'project_list' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i> Back to Projects
+  </a>
 </div>
 
 {% endblock %}

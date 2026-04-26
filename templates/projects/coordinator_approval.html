@@ -1,0 +1,213 @@
+{% extends 'base.html' %}
+{% block title %}Approve Evaluation — {{ project.title }} — ProjectArc{% endblock %}
+
+{% block extra_css %}
+<style>
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 7px 0;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 13px;
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-label { color: #6c757d; }
+  .info-value { font-weight: 500; color: #212529; }
+  .rating-big {
+    font-size: 3rem;
+    font-weight: 700;
+    color: #2ecc71;
+    line-height: 1;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item">
+      <a href="{% url 'dashboard' %}">Dashboard</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{% url 'project_detail' project.pk %}">
+        {{ project.title|truncatechars:30 }}
+      </a>
+    </li>
+    <li class="breadcrumb-item active">Coordinator Approval</li>
+  </ol>
+</nav>
+
+<div class="row g-4">
+
+  <div class="col-md-4">
+
+    <div class="card mb-3">
+      <div class="card-header">
+        <i class="bi bi-folder2-open"></i> Project Info
+      </div>
+      <div class="card-body">
+        <div class="info-row">
+          <span class="info-label">Title</span>
+          <span class="info-value">{{ project.title|truncatechars:25 }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Domain</span>
+          <span class="info-value">{{ project.get_domain_display }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Guide</span>
+          <span class="info-value">
+            {% if project.guide %}
+              {{ project.guide.get_full_name|default:project.guide.username }}
+            {% else %}
+              Not assigned
+            {% endif %}
+          </span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Team</span>
+          <span class="info-value">{{ project.members.count }} member(s)</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Progress</span>
+          <span class="info-value">{{ project.completion_percent }}%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header">
+        <i class="bi bi-star-fill text-warning"></i> Guide Evaluation
+      </div>
+      <div class="card-body">
+        <div class="text-center mb-3">
+          <div class="rating-big">{{ evaluation.guide_rating }}</div>
+          <div class="text-muted small">out of 10</div>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Submitted</span>
+          <span class="info-value">
+            {{ evaluation.guide_submitted_at|date:"d M Y" }}
+          </span>
+        </div>
+        <div class="mt-3">
+          <div class="fw-semibold small mb-1">Guide Comments</div>
+          <div class="bg-light rounded p-3 small">
+            {{ evaluation.guide_comments|linebreaks }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-shield-check"></i> Coordinator Decision
+      </div>
+      <div class="card-body p-4">
+
+        {% if evaluation.coordinator_approval != 'pending' %}
+        <div class="alert
+          {% if evaluation.coordinator_approval == 'approved' %}alert-success
+          {% else %}alert-danger{% endif %}">
+          <i class="bi bi-check-circle"></i>
+          This evaluation has already been
+          <strong>{{ evaluation.get_coordinator_approval_display }}</strong>
+          on {{ evaluation.coordinator_approved_at|date:"d M Y" }}.
+        </div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">
+              Approval Decision <span class="text-danger">*</span>
+            </label>
+            {{ form.coordinator_approval }}
+            {% if form.coordinator_approval.errors %}
+            <div class="text-danger small mt-1">
+              {{ form.coordinator_approval.errors.0 }}
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">
+              Coordinator Comments
+            </label>
+            {{ form.coordinator_comments }}
+            {% if form.coordinator_comments.errors %}
+            <div class="text-danger small mt-1">
+              {{ form.coordinator_comments.errors.0 }}
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">
+              Publication Status <span class="text-danger">*</span>
+            </label>
+            {{ form.publication_status }}
+            {% if form.publication_status.errors %}
+            <div class="text-danger small mt-1">
+              {{ form.publication_status.errors.0 }}
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">
+              Certificate Copy
+              <span class="text-muted fw-normal">(optional)</span>
+            </label>
+            {{ form.certificate_copy }}
+            {% if form.certificate_copy.errors %}
+            <div class="text-danger small mt-1">
+              {{ form.certificate_copy.errors.0 }}
+            </div>
+            {% endif %}
+            <div class="text-muted small mt-1">
+              {{ form.certificate_copy.help_text }}
+            </div>
+
+            {% if evaluation.certificate_copy %}
+            <div class="mt-2">
+              <span class="badge bg-success">
+                <i class="bi bi-file-earmark-check"></i>
+                Certificate already uploaded
+              </span>
+              <a href="{{ evaluation.certificate_copy.url }}"
+                target="_blank"
+                class="btn btn-sm btn-outline-success ms-2">
+                <i class="bi bi-download"></i> View
+              </a>
+            </div>
+            {% endif %}
+          </div>
+
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+          {% endif %}
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-dark">
+              <i class="bi bi-shield-check"></i> Save Decision
+            </button>
+            <a href="{% url 'project_detail' project.pk %}"
+              class="btn btn-outline-secondary">
+              Cancel
+            </a>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
