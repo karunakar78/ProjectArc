@@ -7,7 +7,8 @@ class ProjectsConfig(AppConfig):
 
     def ready(self):
         """
-        Import signals here so the receiver is registered
-        when Django starts. Without this the signal never fires.
+        Import signals here so the receiver registers
+        when Django starts. Without this the signal
+        never fires regardless of what's in signals.py.
         """
         import projects.signals   # noqa: F401
