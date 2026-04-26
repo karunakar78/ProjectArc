@@ -77,10 +77,20 @@ def dashboard(request):
 
 @login_required
 def project_list(request):
-    query    = request.GET.get('q', '').strip()
-    projects = Project.objects.select_related('guide').prefetch_related('members')
+    query = request.GET.get('q', '').strip()
+
+    # coordinators and guides see all projects
+    # students see only projects they are members of
+    if is_coordinator(request.user) or is_guide(request.user):
+        projects = Project.objects.select_related('guide').prefetch_related('members')
+    else:
+        projects = request.user.enrolled_projects.select_related(
+            'guide'
+        ).prefetch_related('members')
+
     if query:
         projects = projects.filter(title__icontains=query)
+
     return render(request, 'projects/project_list.html', {
         'projects': projects,
         'query':    query,
@@ -135,6 +145,11 @@ def register_project(request):
                 project = form.save()
                 reversion.set_user(request.user)
                 reversion.set_comment('Project registered.')
+
+            # make sure the registering student is always a member
+            if request.user not in project.members.all():
+                project.members.add(request.user)
+
             messages.success(
                 request,
                 f'Project "{project.title}" registered. '
@@ -142,7 +157,9 @@ def register_project(request):
             )
             return redirect('project_detail', pk=project.pk)
     else:
-        form = ProjectForm()
+        # pre-select the logged-in student in the members dropdown
+        form = ProjectForm(initial={'members': [request.user.pk]})
+
     return render(request, 'projects/project_form.html', {'form': form})
 
 
@@ -159,13 +176,13 @@ def allot_guide_list(request):
         messages.error(request, 'Only coordinators can allot guides.')
         return redirect('dashboard')
 
-    # split into two lists for clarity
     unallotted = Project.objects.filter(guide__isnull=True).prefetch_related('members')
     allotted   = Project.objects.filter(guide__isnull=False).select_related('guide')
 
     return render(request, 'projects/admin_allotment.html', {
         'unallotted': unallotted,
         'allotted':   allotted,
+        'total':      unallotted.count() + allotted.count(),  # add this
     })
 
 
@@ -410,24 +427,43 @@ def approve_milestone(request, milestone_id):
 
     if request.method == 'POST':
         marks = request.POST.get('marks', '').strip()
+
+        # marks are required before approving
+        if not marks:
+            messages.error(
+                request,
+                f'Please enter marks before approving '
+                f'{milestone.get_stage_display()}.'
+            )
+            return redirect('project_detail', pk=milestone.project.pk)
+
+        try:
+            marks_value = float(marks)
+            if marks_value < 0 or marks_value > 100:
+                raise ValueError
+        except ValueError:
+            messages.error(
+                request,
+                'Marks must be a number between 0 and 100.'
+            )
+            return redirect('project_detail', pk=milestone.project.pk)
+
         with reversion.create_revision():
             milestone.status = 'approved'
-            if marks:
-                try:
-                    milestone.marks = float(marks)
-                except ValueError:
-                    pass
+            milestone.marks  = marks_value
             milestone.save()
             reversion.set_user(request.user)
-            reversion.set_comment(f'Approved by {request.user.username}.')
+            reversion.set_comment(
+                f'Approved with {marks_value} marks by {request.user.username}.'
+            )
 
         messages.success(
             request,
-            f'{milestone.get_stage_display()} approved for '
-            f'"{milestone.project.title}".'
+            f'{milestone.get_stage_display()} approved with '
+            f'{marks_value} marks for "{milestone.project.title}".'
         )
-    return redirect('project_detail', pk=milestone.project.pk)
 
+    return redirect('project_detail', pk=milestone.project.pk)
 
 # ──────────────────────────────────────────
 # Reject Milestone

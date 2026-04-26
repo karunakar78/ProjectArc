@@ -16,9 +16,12 @@ class ProjectForm(forms.ModelForm):
 
     members = forms.ModelMultipleChoiceField(
         queryset=User.objects.filter(is_staff=False),
-        widget=forms.CheckboxSelectMultiple(),
+        widget=forms.SelectMultiple(attrs={
+            'class': 'form-select',
+            'size':  '6',
+        }),
         required=False,
-        help_text='Select all students in your team.'
+        help_text='Hold Cmd (Mac) or Ctrl (Windows) to select multiple students.'
     )
 
     class Meta:
