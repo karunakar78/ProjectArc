@@ -1,4 +1,7 @@
 from pathlib import Path
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -85,3 +88,13 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/dashboard/"
 LOGOUT_REDIRECT_URL = "/login/"
+
+
+# Email — Gmail SMTP
+EMAIL_BACKEND       = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST          = 'smtp.gmail.com'
+EMAIL_PORT          = 587
+EMAIL_USE_TLS       = True
+EMAIL_HOST_USER     = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL  = 'ProjectArc <your_gmail@gmail.com>'

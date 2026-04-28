@@ -9,6 +9,15 @@
   .stage-pending   { border-left-color: #bdc3c7; }
   .marks-input { width: 90px; display: inline-block; }
   .eval-section { border-left: 4px solid #9b59b6; border-radius: 0 10px 10px 0; }
+  .rejection-box {
+    background: #fff5f5;
+    border: 1px solid #f5c6cb;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #721c24;
+    margin-top: 6px;
+  }
 </style>
 {% endblock %}
 
@@ -112,6 +121,12 @@
                   Not uploaded yet
                 {% endif %}
               </small>
+              {% if ms and ms.status == 'rejected' and ms.rejection_reason %}
+              <div class="rejection-box mt-1">
+                <i class="bi bi-exclamation-circle"></i>
+                <strong>Reason:</strong> {{ ms.rejection_reason }}
+              </div>
+              {% endif %}
             </div>
           </div>
         </div>
@@ -135,6 +150,7 @@
 
         <div class="col-md-4">
           <div class="d-flex flex-wrap justify-content-md-end gap-2">
+
             {% if ms and ms.versions.count > 0 %}
             <a href="{% url 'milestone_history' project.pk stage %}"
               class="btn btn-sm btn-outline-secondary">
@@ -153,22 +169,74 @@
 
             {% if is_guide or is_coordinator %}
               {% if ms and ms.status == 'submitted' %}
+
               <form method="post" action="{% url 'approve_milestone' ms.pk %}"
                 class="d-inline-flex align-items-center gap-1">
                 {% csrf_token %}
-                <input type="number" name="marks" placeholder="Marks *"
+                <input type="number" name="marks" placeholder="0-100 *"
                   class="form-control form-control-sm marks-input"
                   min="0" max="100" step="0.5" required
-                  title="Marks are required before approving"/>
+                  title="Enter marks between 0 and 100"/>
                 <button type="submit" class="btn btn-sm btn-success">Approve</button>
               </form>
-              <form method="post" action="{% url 'reject_milestone' ms.pk %}"
-                class="d-inline">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-danger">Reject</button>
-              </form>
+
+              <!-- reject button triggers modal -->
+              <button
+                type="button"
+                class="btn btn-sm btn-danger"
+                data-bs-toggle="modal"
+                data-bs-target="#rejectModal{{ ms.pk }}"
+              >
+                Reject
+              </button>
+
+              <!-- reject modal -->
+              <div class="modal fade" id="rejectModal{{ ms.pk }}"
+                tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                      <h6 class="modal-title mb-0">
+                        <i class="bi bi-x-circle"></i>
+                        Reject — {{ ms.get_stage_display }}
+                      </h6>
+                      <button type="button" class="btn-close btn-close-white"
+                        data-bs-dismiss="modal"></button>
+                    </div>
+                    <form method="post" action="{% url 'reject_milestone' ms.pk %}">
+                      {% csrf_token %}
+                      <div class="modal-body">
+                        <p class="small text-muted mb-3">
+                          The student will see this reason and receive
+                          an email notification to re-upload.
+                        </p>
+                        <label class="form-label fw-semibold">
+                          Reason for Rejection
+                          <span class="text-danger">*</span>
+                        </label>
+                        <textarea
+                          name="rejection_reason"
+                          class="form-control"
+                          rows="4"
+                          placeholder="Explain what needs to be fixed or improved..."
+                          required
+                        ></textarea>
+                      </div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                          data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger btn-sm">
+                          <i class="bi bi-x-circle"></i> Confirm Reject
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+
               {% elif ms and ms.status == 'approved' %}
               <span class="badge bg-success py-2 px-3">Approved</span>
+
               {% elif ms and ms.status == 'rejected' %}
               <span class="badge bg-danger py-2 px-3">Rejected</span>
               {% endif %}

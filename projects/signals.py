@@ -1,14 +1,13 @@
-from django.db.models.signals  import post_save
-from django.dispatch           import receiver
+from django.db.models.signals   import post_save
+from django.dispatch            import receiver
 from django.contrib.auth.models import User
-from django.utils              import timezone
-from django.db                 import models
+from django.core.mail           import send_mail
+from django.conf                import settings
+from django.db                  import models
 
 
 # ──────────────────────────────────────────
 # Notification model
-# Stores coordinator alerts in the DB.
-# Drives the bell badge in the navbar.
 # ──────────────────────────────────────────
 
 class Notification(models.Model):
@@ -30,31 +29,19 @@ class Notification(models.Model):
 
 
 # ──────────────────────────────────────────
-# Signal — notify coordinator when guide
-# submits an evaluation.
-#
-# Trigger: post_save on Evaluation
-# Condition: guide_submitted_at just changed
-#   from None to a timestamp
-#
-# Replaces the old Phase 1 completion signal
-# per the updated SRS.
+# Signal — fires when guide submits
+# evaluation. Sends DB notification AND
+# an email to every coordinator.
 # ──────────────────────────────────────────
 
 @receiver(post_save, sender='projects.Evaluation')
 def notify_coordinator_on_evaluation(sender, instance, created, **kwargs):
-    """
-    Fires when a guide saves an evaluation with
-    guide_submitted_at populated.
-    Notifies all coordinators (superusers).
-    """
 
-    # only act when guide has actually submitted
+    # only act when guide has submitted
     if not instance.guide_submitted_at:
         return
 
-    # only act when coordinator approval is still pending
-    # avoids re-notifying on coordinator's own save
+    # don't re-fire when coordinator saves their own approval
     if instance.coordinator_approval != 'pending':
         return
 
@@ -75,9 +62,36 @@ def notify_coordinator_on_evaluation(sender, instance, created, **kwargs):
         f"Awaiting your approval."
     )
 
+    # email content
+    subject = (
+        f"[ProjectArc] Evaluation submitted — "
+        f"{instance.project.title}"
+    )
+
+    email_body = f"""
+ProjectArc — Evaluation Submission Alert
+─────────────────────────────────────────
+
+Guide         : {guide_name}
+Project       : {instance.project.title}
+Domain        : {instance.project.get_domain_display()}
+Rating Given  : {instance.guide_rating} / 10
+Submitted At  : {instance.guide_submitted_at.strftime('%d %b %Y, %H:%M')}
+
+Guide Comments:
+{instance.guide_comments or 'No comments provided.'}
+
+─────────────────────────────────────────
+Please log in to ProjectArc to review and
+approve this evaluation.
+
+http://127.0.0.1:8000/coordinator/approve/{instance.project.pk}/
+─────────────────────────────────────────
+"""
+
     for coordinator in coordinators:
 
-        # avoid duplicate notifications for the same evaluation
+        # ── DB notification (bell badge) ──
         already_notified = Notification.objects.filter(
             recipient=coordinator,
             message=message,
@@ -89,3 +103,22 @@ def notify_coordinator_on_evaluation(sender, instance, created, **kwargs):
                 recipient=coordinator,
                 message=message
             )
+
+        # ── Email notification ─────────────
+        # uses coordinator's email if set,
+        # falls back to a placeholder
+        recipient_email = coordinator.email or 'coordinator@projectarc.local'
+
+        try:
+            send_mail(
+                subject=subject,
+                message=email_body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[recipient_email],
+                fail_silently=True,
+                # fail_silently=True means email errors
+                # won't crash the evaluation submission
+            )
+        except Exception:
+            # never let email failure break the app
+            pass

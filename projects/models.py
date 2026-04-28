@@ -90,6 +90,10 @@ class Milestone(models.Model):
     stage        = models.CharField(max_length=20, choices=STAGE_CHOICES)
     status       = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     marks        = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    rejection_reason  = models.TextField(
+                      blank=True,
+                      help_text='Reason for rejection — visible to the student.'
+                    )
     submitted_by = models.ForeignKey(
                      User,
                      on_delete=models.SET_NULL,

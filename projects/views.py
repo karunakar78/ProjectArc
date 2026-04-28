@@ -478,16 +478,74 @@ def reject_milestone(request, milestone_id):
     milestone = get_object_or_404(Milestone, pk=milestone_id)
 
     if request.method == 'POST':
+        reason = request.POST.get('rejection_reason', '').strip()
+
+        if not reason:
+            messages.error(
+                request,
+                'Please provide a reason for rejection '
+                'so the student knows what to fix.'
+            )
+            return redirect('project_detail', pk=milestone.project.pk)
+
         with reversion.create_revision():
-            milestone.status = 'rejected'
+            milestone.status           = 'rejected'
+            milestone.rejection_reason = reason
             milestone.save()
             reversion.set_user(request.user)
-            reversion.set_comment(f'Rejected by {request.user.username}.')
+            reversion.set_comment(
+                f'Rejected by {request.user.username}. Reason: {reason}'
+            )
+
+        # notify student via email
+        project  = milestone.project
+        students = project.members.filter(is_staff=False)
+
+        subject = (
+            f'[ProjectArc] {milestone.get_stage_display()} '
+            f'rejected — {project.title}'
+        )
+        body = f"""
+ProjectArc — Milestone Rejected
+────────────────────────────────
+
+Project : {project.title}
+Stage   : {milestone.get_stage_display()}
+Status  : Rejected
+
+Reason:
+{reason}
+
+────────────────────────────────
+Please log in to ProjectArc,
+review the feedback, and re-upload
+your document.
+
+http://127.0.0.1:8000/projects/{project.pk}/upload/{milestone.stage}/
+────────────────────────────────
+"""
+        from django.core.mail import send_mail
+        from django.conf import settings
+
+        for student in students:
+            if student.email:
+                try:
+                    send_mail(
+                        subject=subject,
+                        message=body,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[student.email],
+                        fail_silently=True,
+                    )
+                except Exception:
+                    pass
 
         messages.warning(
             request,
-            f'{milestone.get_stage_display()} rejected. Student can re-upload.'
+            f'{milestone.get_stage_display()} rejected. '
+            'Student notified with reason.'
         )
+
     return redirect('project_detail', pk=milestone.project.pk)
 
 
