@@ -18,28 +18,28 @@
 
 | Field         | Details                        |
 |---------------|--------------------------------|
-| Team Name     | _(your team name)_             |
-| Institution   | _(your college / university)_  |
-| Department    | _(your department)_            |
-| Semester      | _(e.g. VI Semester)_           |
-| Academic Year | _(e.g. 2024–25)_               |
+| Team Name     | _(ByteX)_             |
+| Institution   | _(SJB Institute of Technology)_  |
+| Department    | _(Computer Science and Engineering)_            |
+| Semester      | _(VI Semester)_           |
+| Academic Year | _(2025–26)_               |
 | Subject       | Full Stack Development         |
-| Subject Code  | _(your subject code)_          |
+| Subject Code  | _(23CSE644)_          |
 
 ### Team Members
 
 | Name | USN / Roll No | Role |
 |------|---------------|------|
-| _(Member 1 name)_ | _(USN)_ | Developer |
-| _(Member 2 name)_ | _(USN)_ | Developer |
-| _(Member 3 name)_ | _(USN)_ | Developer |
-| _(Member 4 name)_ | _(USN)_ | Developer |
+| _(Karunakar Raunak)_ | _(1JB23CS076)_ | Developer |
+| _(Sourabh Kumar)_ | _(1JB23CS153)_ | Developer |
+| _(Saumya Raj)_ | _(1JB23CS137)_ | Developer |
+| _(Poornashree J P)_ | _(1JB23CS411)_ | Developer |
 
 ### Faculty Guide
 
 | Name | Designation | Department |
 |------|-------------|------------|
-| _(Guide name)_ | _(e.g. Assistant Professor)_ | _(Department)_ |
+| _(Shilpashree)_ | _(e.g. Assistant Professor)_ | _(CSE)_ |
 
 ---
 
@@ -245,4 +245,4 @@ Visit `http://127.0.0.1:8000`
 
 ---
 
-*ProjectArc — Built with Django · Bootstrap 5 · jQuery · Chart.js*
+*ProjectArc — Built with Django
