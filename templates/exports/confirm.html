@@ -1,18 +1,19 @@
 {% extends 'base.html' %}
-{% block title %}Export CSV — ProjectArc{% endblock %}
+{% block title %}Export — ProjectArc{% endblock %}
 
 {% block content %}
 
 <div class="mb-4">
-  <h4><i class="bi bi-download"></i> Export Project Data</h4>
-  <small class="text-muted">Filter by guide or domain then download as CSV</small>
+  <h4><i class="bi bi-download"></i> Export Data</h4>
+  <small class="text-muted">Download filtered CSV or project README</small>
 </div>
 
 <div class="row">
 
   <div class="col-md-4">
-    <div class="card mb-4">
-      <div class="card-header"><i class="bi bi-funnel"></i> Filters</div>
+
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-funnel"></i> CSV Filters</div>
       <div class="card-body">
         <form method="get" id="filter-form">
           <div class="mb-3">
@@ -22,6 +23,10 @@
           <div class="mb-3">
             <label class="form-label fw-semibold small">Domain</label>
             {{ form.domain }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Publication Status</label>
+            {{ form.publication_status }}
           </div>
           <div class="d-grid gap-2">
             <button type="submit" class="btn btn-outline-dark btn-sm">
@@ -34,6 +39,26 @@
         </form>
       </div>
     </div>
+
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-file-earmark-text"></i> README Export
+      </div>
+      <div class="card-body">
+        <p class="small text-muted mb-3">
+          Downloads a complete <code>README.md</code> with live project
+          stats, CO-SDG mapping table, and 150-word SDG justification
+          — ready to submit as required by the SRS.
+        </p>
+        
+          href="{% url 'export_readme' %}"
+          class="btn btn-dark btn-sm w-100"
+        >
+          <i class="bi bi-markdown"></i> Download README.md
+        </a>
+      </div>
+    </div>
+
   </div>
 
   <div class="col-md-8">
@@ -65,9 +90,7 @@
               <td class="small">
                 {% if project.guide %}
                   {{ project.guide.get_full_name|default:project.guide.username }}
-                {% else %}
-                  —
-                {% endif %}
+                {% else %}—{% endif %}
               </td>
               <td class="small">{{ project.members.count }} member(s)</td>
               <td style="min-width:120px">
