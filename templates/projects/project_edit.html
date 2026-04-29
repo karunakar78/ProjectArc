@@ -1,0 +1,387 @@
+{% extends 'base.html' %}
+{% block title %}Edit — {{ project.title }} — ProjectArc{% endblock %}
+
+{% block extra_css %}
+<style>
+  .member-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #212529;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .member-tag.you { background: #3498db; }
+  .member-tag .remove-btn {
+    cursor: pointer;
+    opacity: .7;
+    font-size: 14px;
+    line-height: 1;
+    background: none;
+    border: none;
+    color: white;
+    padding: 0;
+  }
+  .member-tag .remove-btn:hover { opacity: 1; }
+  #selected-members-box {
+    min-height: 48px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 8px 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    background: #f8f9fa;
+  }
+  .empty-hint { color: #adb5bd; font-size: 13px; }
+  .member-picker { position: relative; }
+  .member-picker-input {
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    padding: 8px 36px 8px 12px;
+    width: 100%;
+    font-size: 14px;
+    outline: none;
+    background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236c757d' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398l3.85 3.85a1 1 0 0 0 1.415-1.415l-3.868-3.833zm-5.242 1.156a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z'/%3E%3C/svg%3E") no-repeat right 12px center;
+  }
+  .member-picker-input:focus {
+    border-color: #212529;
+    box-shadow: 0 0 0 2px rgba(33,37,41,.1);
+  }
+  .member-picker-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0; right: 0;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.1);
+    z-index: 999;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+  }
+  .member-picker-dropdown.open { display: block; }
+  .picker-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    border-bottom: 1px solid #f5f5f5;
+    transition: background .1s;
+  }
+  .picker-item:last-child { border-bottom: none; }
+  .picker-item:hover { background: #f8f9fa; }
+  .picker-item.selected-item { background: #f0f0f0; color: #adb5bd; cursor: default; }
+  .picker-item .avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: #212529;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .picker-item .avatar.you-av { background: #3498db; }
+  .picker-item .item-name { font-weight: 500; color: #212529; }
+  .picker-item .item-sub  { font-size: 11px; color: #adb5bd; }
+  .picker-item.selected-item .item-name { color: #adb5bd; }
+  .picker-no-results { padding: 14px; text-align: center; color: #adb5bd; font-size: 13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+    <li class="breadcrumb-item">
+      <a href="{% url 'project_detail' project.pk %}">
+        {{ project.title|truncatechars:30 }}
+      </a>
+    </li>
+    <li class="breadcrumb-item active">Edit</li>
+  </ol>
+</nav>
+
+<div class="row justify-content-center">
+  <div class="col-md-8">
+
+    {% if project.milestones.filter %}
+    <div class="alert alert-warning py-2 small mb-3">
+      <i class="bi bi-exclamation-triangle"></i>
+      Note: Editing is locked once a milestone is approved.
+      Only title, domain, description and members can be changed.
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-pencil"></i> Edit Project</span>
+        <span class="badge bg-secondary">{{ project.get_domain_display }}</span>
+      </div>
+      <div class="card-body p-4">
+
+        <form method="post" id="edit-form">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              Project Title <span class="text-danger">*</span>
+            </label>
+            {{ form.title }}
+            {% if form.title.errors %}
+            <div class="text-danger small mt-1">{{ form.title.errors.0 }}</div>
+            {% endif %}
+            <div id="title-suggestions" class="mt-2 d-none">
+              <div class="alert alert-warning py-2 small mb-0">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>Similar titles found:</strong>
+                <ul class="mb-0 mt-1" id="title-list"></ul>
+              </div>
+            </div>
+            <div id="title-spinner" class="mt-1 d-none">
+              <small class="text-muted">
+                <span class="spinner-border spinner-border-sm"></span>
+                Checking for duplicates...
+              </small>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Domain</label>
+            {{ form.domain }}
+            {% if form.domain.errors %}
+            <div class="text-danger small mt-1">{{ form.domain.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Description</label>
+            {{ form.description }}
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Team Members</label>
+
+            <div class="member-picker mb-2" id="member-picker">
+              <input
+                type="text"
+                id="member-search"
+                class="member-picker-input"
+                placeholder="Search students by name..."
+                autocomplete="off"
+              />
+              <div class="member-picker-dropdown" id="picker-dropdown"></div>
+            </div>
+
+            <div class="fw-semibold small text-muted mb-2">
+              Selected Members
+              <span id="member-count" class="badge bg-secondary ms-1">0</span>
+            </div>
+            <div id="selected-members-box">
+              <span class="empty-hint">No members selected.</span>
+            </div>
+
+            <div class="text-muted mt-2" style="font-size:12px">
+              <i class="bi bi-info-circle"></i>
+              Search and click to add. Click
+              <strong>&times;</strong> to remove.
+            </div>
+
+            <select name="members" multiple id="id_members" class="d-none">
+              {% for user in form.members.field.queryset %}
+              <option value="{{ user.pk }}">
+                {{ user.get_full_name|default:user.username }}
+              </option>
+              {% endfor %}
+            </select>
+
+            {% if form.members.errors %}
+            <div class="text-danger small mt-1">{{ form.members.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+          {% endif %}
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-dark">
+              <i class="bi bi-save"></i> Save Changes
+            </button>
+            <a href="{% url 'project_detail' project.pk %}"
+              class="btn btn-outline-secondary">
+              Cancel
+            </a>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+{% load static %}
+<script src="{% static 'js/ajax_search.js' %}"></script>
+<script>
+  var currentUserId   = "{{ request.user.pk }}";
+  var currentUserName = "{{ request.user.get_full_name|default:request.user.username }}";
+
+  // existing members pre-loaded from DB
+  var existingMemberIds = [
+    {% for m in project.members.all %}"{{ m.pk }}"{% if not forloop.last %},{% endif %}{% endfor %}
+  ];
+  var existingMemberNames = {
+    {% for m in project.members.all %}
+    "{{ m.pk }}": "{{ m.get_full_name|default:m.username }}"{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  };
+
+  var allStudents = [
+    {% for user in form.members.field.queryset %}
+    {
+      id:   "{{ user.pk }}",
+      name: "{{ user.get_full_name|default:user.username }}",
+      you:  {% if user.pk == request.user.pk %}true{% else %}false{% endif %}
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  var selected     = {};
+  var searchInput  = document.getElementById('member-search');
+  var dropdown     = document.getElementById('picker-dropdown');
+  var box          = document.getElementById('selected-members-box');
+  var countBadge   = document.getElementById('member-count');
+  var hiddenSelect = document.getElementById('id_members');
+
+  function renderDropdown(query) {
+    query = (query || '').toLowerCase().trim();
+    var filtered = allStudents.filter(function(s) {
+      return s.name.toLowerCase().includes(query);
+    });
+    dropdown.innerHTML = '';
+    if (filtered.length === 0) {
+      dropdown.innerHTML = '<div class="picker-no-results">No students found.</div>';
+      dropdown.classList.add('open');
+      return;
+    }
+    filtered.forEach(function(s) {
+      var isSelected = !!selected[s.id];
+      var item       = document.createElement('div');
+      item.className = 'picker-item' + (isSelected ? ' selected-item' : '');
+      var initials   = s.name.split(' ').map(function(w){ return w[0]; }).join('').substring(0,2).toUpperCase();
+      item.innerHTML = (
+        '<div class="avatar' + (s.you ? ' you-av' : '') + '">' + initials + '</div>' +
+        '<div>' +
+          '<div class="item-name">' + s.name + (s.you ? ' <span style="font-size:10px;opacity:.7">(You)</span>' : '') + '</div>' +
+          '<div class="item-sub">' + (isSelected ? 'Already added' : 'Click to add') + '</div>' +
+        '</div>'
+      );
+      if (!isSelected) {
+        item.addEventListener('click', function() {
+          addMember(s.id, s.name, s.you);
+          searchInput.value = '';
+          dropdown.classList.remove('open');
+          searchInput.focus();
+        });
+      }
+      dropdown.appendChild(item);
+    });
+    dropdown.classList.add('open');
+  }
+
+  function addMember(id, name, you) {
+    if (selected[id]) return;
+    selected[id] = { name: name, you: !!you };
+    renderTags();
+    syncHidden();
+  }
+
+  function removeMember(id) {
+    if (selected[id] && selected[id].you) return;
+    delete selected[id];
+    renderTags();
+    syncHidden();
+  }
+
+  function renderTags() {
+    box.innerHTML = '';
+    var keys = Object.keys(selected);
+    if (keys.length === 0) {
+      box.innerHTML = '<span class="empty-hint">No members selected.</span>';
+      countBadge.textContent = '0';
+      return;
+    }
+    countBadge.textContent = keys.length;
+    keys.forEach(function(id) {
+      var m        = selected[id];
+      var tag      = document.createElement('div');
+      tag.className= 'member-tag' + (m.you ? ' you' : '');
+      var initials = m.name.split(' ').map(function(w){ return w[0]; }).join('').substring(0,2).toUpperCase();
+      tag.innerHTML= (
+        '<span style="font-size:11px;opacity:.8">' + initials + '</span>' +
+        '<span>' + m.name + (m.you ? ' (You)' : '') + '</span>'
+      );
+      if (!m.you) {
+        var btn      = document.createElement('button');
+        btn.type     = 'button';
+        btn.className= 'remove-btn';
+        btn.innerHTML= '&times;';
+        btn.addEventListener('click', function() { removeMember(id); });
+        tag.appendChild(btn);
+      }
+      box.appendChild(tag);
+    });
+  }
+
+  function syncHidden() {
+    Array.from(hiddenSelect.options).forEach(function(opt) {
+      opt.selected = !!selected[opt.value];
+    });
+  }
+
+  searchInput.addEventListener('focus', function() { renderDropdown(this.value); });
+  searchInput.addEventListener('input', function() { renderDropdown(this.value); });
+  document.addEventListener('click', function(e) {
+    if (!document.getElementById('member-picker').contains(e.target)) {
+      dropdown.classList.remove('open');
+    }
+  });
+
+  // ── pre-load existing members on page load ──
+  existingMemberIds.forEach(function(id) {
+    var name  = existingMemberNames[id] || id;
+    var isYou = id === currentUserId;
+    selected[id] = { name: name, you: isYou };
+  });
+
+  // always ensure current user is included
+  if (!selected[currentUserId]) {
+    selected[currentUserId] = { name: currentUserName, you: true };
+  }
+
+  renderTags();
+  syncHidden();
+
+  // guard on submit
+  document.getElementById('edit-form').addEventListener('submit', function() {
+    if (!selected[currentUserId]) {
+      selected[currentUserId] = { name: currentUserName, you: true };
+      syncHidden();
+    }
+  });
+</script>
+{% endblock %}

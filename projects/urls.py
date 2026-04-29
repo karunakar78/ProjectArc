@@ -7,6 +7,7 @@ urlpatterns = [
     # ── Projects ──────────────────────────────────
     path("projects/", views.project_list, name="project_list"),
     path("projects/new/", views.register_project, name="register_project"),
+    path("projects/<int:pk>/edit/", views.edit_project, name="edit_project"),
     path(
         "projects/<int:pk>/", views.ProjectDetailView.as_view(), name="project_detail"
     ),

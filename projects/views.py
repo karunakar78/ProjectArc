@@ -194,6 +194,68 @@ def register_project(request):
 
 
 # ──────────────────────────────────────────
+# Project Edit
+# Students can update title, domain,
+# description and members.
+# Guide is excluded — only coordinator
+# can change that via allotment page.
+# Coordinator can edit anything.
+# ──────────────────────────────────────────
+
+@login_required
+def edit_project(request, pk):
+    project = get_object_or_404(Project, pk=pk)
+
+    # only members of the project or coordinator can edit
+    if not is_coordinator(request.user):
+        if request.user not in project.members.all():
+            messages.error(
+                request,
+                'You can only edit projects you are a member of.'
+            )
+            return redirect('project_list')
+
+    # block edits if any milestone is already approved
+    # to protect academic integrity
+    if not is_coordinator(request.user):
+        if project.milestones.filter(status='approved').exists():
+            messages.warning(
+                request,
+                'This project cannot be edited after a milestone '
+                'has been approved. Contact your coordinator.'
+            )
+            return redirect('project_detail', pk=pk)
+
+    if request.method == 'POST':
+        form = ProjectForm(request.POST, instance=project)
+        if form.is_valid():
+            with reversion.create_revision():
+                updated = form.save()
+
+                # ensure the editing student stays a member
+                if not is_coordinator(request.user):
+                    if request.user not in updated.members.all():
+                        updated.members.add(request.user)
+
+                reversion.set_user(request.user)
+                reversion.set_comment(
+                    f'Project edited by {request.user.username}.'
+                )
+
+            messages.success(
+                request,
+                f'Project "{project.title}" updated successfully.'
+            )
+            return redirect('project_detail', pk=pk)
+    else:
+        form = ProjectForm(instance=project)
+
+    return render(request, 'projects/project_edit.html', {
+        'form':    form,
+        'project': project,
+    })
+
+# ──────────────────────────────────────────
 # Guide Allotment
 # Coordinator-only page.
 # Lists all projects without a guide +
