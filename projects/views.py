@@ -457,10 +457,82 @@ def approve_milestone(request, milestone_id):
                 f'Approved with {marks_value} marks by {request.user.username}.'
             )
 
+        # ── email students ─────────────────────
+        from django.core.mail import send_mail
+        from django.conf import settings
+
+        project  = milestone.project
+        students = project.members.filter(is_staff=False)
+
+        subject = (
+            f'[ProjectArc] {milestone.get_stage_display()} '
+            f'approved — {project.title}'
+        )
+
+        # work out next stage message
+        STAGE_ORDER = ['synopsis', 'phase1', 'phase2', 'final', 'publication']
+        STAGE_LABELS = {
+            'synopsis':    'Synopsis',
+            'phase1':      'Phase 1',
+            'phase2':      'Phase 2',
+            'final':       'Final Report',
+            'publication': 'Publication Details',
+        }
+        current_index = STAGE_ORDER.index(milestone.stage)
+        if current_index < len(STAGE_ORDER) - 1:
+            next_stage       = STAGE_ORDER[current_index + 1]
+            next_stage_label = STAGE_LABELS[next_stage]
+            next_step = (
+                f'You can now upload your {next_stage_label}.\n'
+                f'http://127.0.0.1:8000/projects/{project.pk}'
+                f'/upload/{next_stage}/'
+            )
+        else:
+            next_step = (
+                'Congratulations — all stages are complete!\n'
+                'Your guide will now submit the final evaluation.'
+            )
+
+        body = f"""
+ProjectArc — Milestone Approved
+────────────────────────────────
+
+Project : {project.title}
+Stage   : {milestone.get_stage_display()}
+Status  : Approved ✓
+Marks   : {marks_value} / 100
+
+Guide   : {project.guide.get_full_name() or project.guide.username if project.guide else '—'}
+
+────────────────────────────────
+Next Step:
+{next_step}
+────────────────────────────────
+"""
+
+        for student in students:
+            if not student.email:
+                continue   # skip silently — no email set
+            try:
+                send_mail(
+                    subject=subject,
+                    message=body,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[student.email],
+                    fail_silently=True,
+                )
+            except Exception:
+                pass       # never let email failure block the approval
+
+        notified = [s.username for s in students if s.email]
+        notif_msg = (
+            f'Notified: {", ".join(notified)}' if notified
+            else 'No student emails on file.'
+        )
         messages.success(
             request,
             f'{milestone.get_stage_display()} approved with '
-            f'{marks_value} marks for "{milestone.project.title}".'
+            f'{marks_value} marks. {notif_msg}'
         )
 
     return redirect('project_detail', pk=milestone.project.pk)
@@ -528,17 +600,18 @@ http://127.0.0.1:8000/projects/{project.pk}/upload/{milestone.stage}/
         from django.conf import settings
 
         for student in students:
-            if student.email:
-                try:
-                    send_mail(
-                        subject=subject,
-                        message=body,
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        recipient_list=[student.email],
-                        fail_silently=True,
-                    )
-                except Exception:
-                    pass
+            if not student.email:
+                continue   # skip silently — no email set
+            try:
+                send_mail(
+                    subject=subject,
+                    message=body,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[student.email],
+                    fail_silently=True,
+                )
+            except Exception:
+                pass
 
         messages.warning(
             request,
