@@ -118,16 +118,45 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
                 stage=stage
             ).first()
 
-        # get evaluation if it exists
         evaluation = Evaluation.objects.filter(
             project=self.object
         ).first()
+
+        # ── marks summary ──────────────────────
+        approved_milestones = self.object.milestones.filter(
+            status='approved',
+            marks__isnull=False
+        )
+
+        total_marks    = sum(
+            ms.marks for ms in approved_milestones
+        )
+        approved_count = approved_milestones.count()
+        max_possible   = approved_count * 100
+        average_marks  = (
+            round(total_marks / approved_count, 2)
+            if approved_count > 0 else 0
+        )
+
+        # per stage marks for the summary table
+        stage_marks = {}
+        for stage in stages:
+            ms = milestone_map.get(stage)
+            stage_marks[stage] = ms.marks if ms and ms.marks is not None else None
 
         context['milestone_map']  = milestone_map
         context['stages']         = stages
         context['is_guide']       = is_guide(self.request.user)
         context['is_coordinator'] = is_coordinator(self.request.user)
         context['evaluation']     = evaluation
+
+        # marks context
+        context['total_marks']    = total_marks
+        context['average_marks']  = average_marks
+        context['approved_count'] = approved_count
+        context['max_possible']   = max_possible
+        context['stage_marks']    = stage_marks
+
         return context
 
 
